@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 import { loadStore, saveStore, addLog, markSeen, addSchedule, getDueSchedules, updateScheduleStatus, removeSchedule, exportLogs, filterLogs, getRulesList, exportStats } from "./lib/store.js";
 import { matchRule, render } from "./lib/engine.js";
 import { MetaClient, MetaError, resolveAccount } from "./lib/meta.js";
+import { resolveAiSettings, generateReply, aiHistoryFromLog, AiError } from "./lib/ai.js";
 
 const POLL_TICK_MS = 5000;
 let poller = { timer: null, running: false, lastRun: null, lastError: null, lastSummary: null };
@@ -522,6 +523,67 @@ const server = createServer(async (req, res) => {
     if (pathName === "/api/rules-list" && req.method === "GET") {
       const store = loadStore();
       return json(res, 200, { rules: getRulesList(store) });
+    }
+
+    // ---------- Agente de IA ----------
+    if (pathName === "/api/ai/config" && req.method === "GET") {
+      const store = loadStore();
+      const ai = resolveAiSettings(store.settings);
+      return json(res, 200, {
+        enabled: ai.enabled,
+        provider: ai.provider,
+        model: ai.model,
+        systemPrompt: ai.systemPrompt,
+        autoSend: ai.autoSend,
+        hasKey: Boolean(ai.key)
+      });
+    }
+
+    if (pathName === "/api/ai/config" && req.method === "POST") {
+      const body = await readBody(req);
+      const store = loadStore();
+      const allowed = ["aiEnabled", "aiProvider", "aiApiKey", "aiModel", "aiSystemPrompt", "aiAutoSend"];
+      for (const key of allowed) {
+        if (body[key] !== undefined) {
+          store.settings[key] = key === "aiApiKey" && !body[key] ? store.settings.aiApiKey : body[key];
+        }
+      }
+      saveStore(store);
+      const ai = resolveAiSettings(store.settings);
+      return json(res, 200, {
+        ok: true,
+        enabled: ai.enabled,
+        provider: ai.provider,
+        model: ai.model,
+        autoSend: ai.autoSend,
+        hasKey: Boolean(ai.key)
+      });
+    }
+
+    if (pathName === "/api/ai/test" && req.method === "POST") {
+      const body = await readBody(req);
+      const store = loadStore();
+      const history = aiHistoryFromLog(store.log, 12);
+      const text = await generateReply([{ direction: "recebida", body: body.text || "Oi" }], store.settings);
+      addLog(store, {
+        mode: "teste ia",
+        username: "sistema",
+        comment: body.text || "",
+        ruleName: "agente de ia",
+        status: "simulado",
+        detail: text
+      });
+      saveStore(store);
+      return json(res, 200, { ok: true, reply: text });
+    }
+
+    if (pathName === "/api/ai/reply" && req.method === "POST") {
+      const body = await readBody(req);
+      const store = loadStore();
+      const history = aiHistoryFromLog(store.log, 12);
+      history.push({ direction: "recebida", body: body.text || "" });
+      const text = await generateReply(history, store.settings);
+      return json(res, 200, { ok: true, reply: text, autoSend: aiHistoryFromLog(store.settings).length > 0 && false });
     }
 
     // ---------- Agendamentos ----------

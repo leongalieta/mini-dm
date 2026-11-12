@@ -670,6 +670,66 @@ $("#edit-sched-form").addEventListener("submit", async (e) => {
 });
 $("#btn-delete-sched").addEventListener("click", deleteSchedule);
 
+// ---------- Agente de IA ----------
+async function loadAiConfig() {
+  try {
+    const c = await api("/ai/config");
+    $("#ai-enabled").checked = Boolean(c.enabled);
+    $("#ai-provider").value = c.provider || "gemini";
+    $("#ai-model").value = c.model || "";
+    $("#ai-auto-send").checked = Boolean(c.autoSend);
+    // não trazemos a chave de volta por segurança; mostramos só se tem
+    $("#ai-key").placeholder = c.hasKey ? "●●●●●●●● (já configurada)" : "Cole sua chave da API";
+  } catch (e) { console.error(e); }
+}
+
+async function saveAiConfig() {
+  try {
+    const res = await api("/ai/config", {
+      method: "POST",
+      body: JSON.stringify({
+        aiEnabled: $("#ai-enabled").checked,
+        aiProvider: $("#ai-provider").value,
+        aiApiKey: $("#ai-key").value.trim() || undefined,
+        aiModel: $("#ai-model").value.trim(),
+        aiSystemPrompt: $("#ai-prompt").value.trim(),
+        aiAutoSend: $("#ai-auto-send").checked
+      })
+    });
+    $("#ai-overlay").hidden = true;
+    toast(res.ok ? "Agente de IA salvo." : "Erro ao salvar agente de IA.");
+  } catch (err) { toast(err.message); }
+}
+
+async function testAi() {
+  const text = $("#ai-test-text").value || "Oi, tudo bem?";
+  try {
+    const res = await api("/ai/test", {
+      method: "POST",
+      body: JSON.stringify({ text })
+    });
+    $("#ai-test-result").textContent = "Resposta: " + (res.reply || "");
+    $("#ai-test-result").style.color = "var(--ok)";
+  } catch (err) {
+    $("#ai-test-result").textContent = "Erro: " + err.message;
+    $("#ai-test-result").style.color = "var(--err)";
+  }
+}
+
+$("#btn-ai").addEventListener("click", () => {
+  $("#ai-overlay").hidden = false;
+  loadAiConfig();
+});
+$("#btn-close-ai").addEventListener("click", () => ($("#ai-overlay").hidden = true));
+$("#ai-overlay").addEventListener("click", (e) => {
+  if (e.target === $("#ai-overlay")) $("#ai-overlay").hidden = true;
+});
+$("#ai-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  await saveAiConfig();
+});
+$("#btn-ai-test").addEventListener("click", testAi);
+
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     closeRule();
@@ -677,6 +737,7 @@ document.addEventListener("keydown", (e) => {
     $("#schedule-overlay").hidden = true;
     $("#stats-overlay").hidden = true;
     $("#edit-schedule-overlay").hidden = true;
+    $("#ai-overlay").hidden = true;
   }
 });
 
@@ -687,6 +748,7 @@ document.addEventListener("keydown", (e) => {
   await refreshLogs();
   await loadStats();
   await loadSchedules();
+  await loadAiConfig();
   setInterval(refresh, 8000);
   setInterval(loadStats, 30000);
   setInterval(loadSchedules, 30000);
