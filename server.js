@@ -455,7 +455,7 @@ const server = createServer(async (req, res) => {
         try {
           let account = resolveAccount(store.settings);
           if (!account.igId) {
-            const discovered = await discoverIgId(account.token);
+            const discovered = await discoverIgId(account.token, store.settings.accountUsername);
             if (discovered) {
               store.settings.igId = discovered;
               await saveStore(store);

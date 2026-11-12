@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert";
-import { resolveAccount } from "../lib/meta.js";
+import { resolveAccount, extractIgAccounts } from "../lib/meta.js";
 import { resolveAiSettings } from "../lib/ai.js";
 
 // Garante que as variáveis de ambiente são a fonte da verdade quando definidas,
@@ -63,4 +63,14 @@ test("IA: AI_ENABLED=false no ambiente desliga mesmo com o painel ligado", () =>
     const cfg = resolveAiSettings({ aiEnabled: true });
     assert.strictEqual(cfg.enabled, false);
   });
+});
+
+test("extractIgAccounts preserva os 17 dígitos do ID (sem arredondar)", () => {
+  // Texto cru, como a Meta devolve; se fosse JSON.parse, o último dígito viraria 4.
+  const raw = '{"data":[{"instagram_business_account":{"id":17841474542682660,"username":"midiaindoor_mga"}},{"instagram_business_account":{"id":17841451834742943,"username":"leoogiro"}}]}';
+  const list = extractIgAccounts(raw);
+  assert.strictEqual(list.length, 2);
+  assert.strictEqual(list[0].id, "17841474542682660");
+  assert.strictEqual(list[1].id, "17841451834742943");
+  assert.strictEqual(list[1].username, "leoogiro");
 });
