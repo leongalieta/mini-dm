@@ -680,7 +680,7 @@ async function checkAuthStatus() {
       $("#btn-auth-toggle").classList.add("hidden");
       $("#btn-logout").classList.add("hidden");
       $("#login-overlay").classList.add("hidden");
-      showTab("regras");
+      showTab("posts");
       return;
     }
     if (res.authenticated && res.user) {
@@ -690,7 +690,7 @@ async function checkAuthStatus() {
       $("#btn-logout").classList.remove("hidden");
       $("#account-name").textContent = "@" + (authUser.username || "usuário");
       $("#login-overlay").classList.add("hidden");
-      showTab("regras");
+      showTab("posts");
     } else {
       authToken = null;
       authUser = null;
@@ -717,7 +717,7 @@ async function doLogin() {
       loginDisabled = true;
       $("#btn-auth-toggle").classList.add("hidden");
       $("#btn-logout").classList.add("hidden");
-      showTab("regras");
+      showTab("posts");
       toast("Login desativado no servidor");
       return;
     }
@@ -729,7 +729,7 @@ async function doLogin() {
     $("#account-name").textContent = "@" + (authUser.username || "usuário");
     $("#login-overlay").classList.add("hidden");
     toast("Bem-vindo, " + (authUser.username || "usuário"));
-    showTab("regras");
+    showTab("posts");
     await loadRules();
   } catch (err) {
     $("#login-error").classList.remove("hidden");
@@ -774,7 +774,7 @@ $("#login-form").addEventListener("submit", async (e) => {
     await loadStats();
     await loadSchedules();
     await loadAiConfig();
-    showTab("regras");
+    showTab("posts");
     setInterval(() => { checkConnection(); loadRules(); }, 8000);
     setInterval(loadStats, 30000);
     setInterval(loadSchedules, 30000);
