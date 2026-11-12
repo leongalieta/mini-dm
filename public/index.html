@@ -99,7 +99,6 @@
         <div id="login-error" class="alert err hidden"></div>
         <button class="primary" type="submit">Entrar</button>
       </form>
-      <p class="muted" style="margin-top:12px;text-align:center">Usuário padrão: <b>admin</b> / Senha: <b>admin123</b></p>
     </div>
   </div>
 
@@ -151,7 +150,7 @@
     <div id="log-filters" style="margin-top:10px"></div>
     <div id="log-controls" style="margin-top:8px"></div>
     <div id="log-list" class="log-list"></div>
-    <p class="empty" id="log-empty">Nada por aqui ainda. Faça um teste para ver o fluxo.</p>
+    <p class="empty" id="log-empty" hidden>Nada por aqui ainda. Faça um teste para ver o fluxo.</p>
   </section>
 
   <section id="view-agendamentos" class="view hidden">
@@ -190,6 +189,9 @@
           <div><strong>Enviadas</strong><span id="stat-sent" style="float:right">0</span></div>
           <div><strong>Simuladas</strong><span id="stat-simulated" style="float:right">0</span></div>
           <div><strong>Erros</strong><span id="stat-error" style="float:right">0</span></div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <div><strong>Logs totais</strong><span id="stat-total-log" style="float:right">0</span></div>
         </div>
         <div class="row" style="margin-top:8px">
           <div><strong>Agendados pendentes</strong><span id="stat-pending-schedules-modal" style="float:right">0</span></div>
@@ -235,6 +237,7 @@
         <button type="button" class="ghost" id="btn-ai-test">Testar agente</button>
         <span id="ai-test-result" style="margin-left:10px; font-size:12px; color:var(--muted);"></span>
       </div>
+      <div style="margin-top:12px"><button type="submit" class="primary">Salvar agente</button></div>
     </form>
     <p class="muted" style="margin-top:12px">O agente responde com base no histórico de conversas quando ativado.</p>
   </section>
@@ -258,13 +261,13 @@
         <input id="set-target-posts" placeholder="17899999999999999, 17900000000000000" />
         <small style="color:var(--muted)">Deixe vazio para usar posts recentes. O ID do post fica na URL do Instagram.</small>
       </label>
+      <div style="margin-top:12px"><button type="submit" class="primary">Salvar</button></div>
       <div class="divider"></div>
       <div class="live-row">
         <div><strong>Modo ao vivo</strong><small id="live-sub">Lê comentários novos e envia as DMs</small></div>
         <button type="button" class="ghost" id="btn-live">Ligar</button>
       </div>
     </form>
-    <button class="ghost small" id="btn-cancel-settings">Fechar</button>
   </section>
 </main>
 

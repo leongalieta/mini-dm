@@ -61,7 +61,8 @@ function showTab(tab) {
   if (btn) btn.classList.add("active");
   const view = $(`#view-${tab}`);
   if (view) view.classList.remove("hidden");
-  $("#menu-backdrop")?.classList.add("hidden");
+  $("#menu-backdrop").hidden = true;
+  $("#sidebar").classList.remove("open");
 
   // Carrega dados específicos de cada tab
   if (tab === "regras") { renderRules(); }
@@ -133,7 +134,6 @@ async function loadRules() {
   try {
     state = await api("/api/state");
     renderRules();
-    renderStatsMini();
   } catch (e) { console.error(e); }
 }
 
@@ -271,20 +271,9 @@ function renderLogControls(total) {
 }
 
 async function refreshLogs() {
-  renderLogHeader();
   const result = await loadLogs();
   renderLog(result.items);
   renderLogControls(result.total);
-}
-
-function renderLogHeader() {
-  const wrap = $("#log-list");
-  if (!wrap) return;
-  if (wrap.querySelector(".log-controls-wrap")) return;
-  const div = document.createElement("div");
-  div.className = "log-controls-wrap";
-  div.innerHTML = `<div id="log-filters"></div><div id="log-controls"></div>`;
-  wrap.parentNode.insertBefore(div, wrap.nextSibling);
 }
 
 window.prevPage = async () => { if (logFilter.page > 1) { logFilter.page--; await refreshLogs(); } };
@@ -333,14 +322,6 @@ async function loadStats() {
     $("#stats-by-day").innerHTML = s.days
       .map(([day, count]) => `<tr><td>${day}</td><td>${count}</td></tr>`).join("");
   } catch (e) { console.error(e); }
-}
-
-function renderStatsMini() {
-  const rules = state?.rules || [];
-  const log = state?.log || [];
-  $("#stat-rules").textContent = rules.filter((r) => r.active).length;
-  $("#stat-log").textContent = log.length;
-  $("#stat-dm").textContent = log.filter((l) => l.status === "enviado" || l.status === "simulado").length;
 }
 
 async function exportStats() {
@@ -448,6 +429,27 @@ async function deleteSchedule() {
   } catch (err) { toast(err.message); }
 }
 
+$("#sched-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  await saveSchedule();
+});
+$("#btn-cancel-schedule").addEventListener("click", () => $("#sched-form").reset());
+
+$("#btn-close-edit-schedule").addEventListener("click", () => {
+  $("#edit-schedule-overlay").hidden = true;
+});
+$("#btn-close-edit-schedule2").addEventListener("click", () => {
+  $("#edit-schedule-overlay").hidden = true;
+});
+$("#btn-delete-sched").addEventListener("click", deleteSchedule);
+$("#edit-sched-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  await saveEditSchedule();
+});
+$("#edit-schedule-overlay").addEventListener("click", (e) => {
+  if (e.target === $("#edit-schedule-overlay")) $("#edit-schedule-overlay").hidden = true;
+});
+
 // ---------- Configurações ----------
 async function loadSettingsForm() {
   try {
@@ -464,7 +466,6 @@ async function loadSettingsForm() {
   } catch (e) { console.error(e); }
 }
 
-$("#btn-cancel-settings").addEventListener("click", () => { /* fecha overlay se houver */ });
 $("#menu-config").addEventListener("click", () => { showTab("config"); loadSettingsForm(); });
 $("#btn-live").addEventListener("click", async () => {
   const s = state?.settings || {};
@@ -509,19 +510,20 @@ $("#settings-form").addEventListener("submit", async (e) => {
 // ---------- Agente de IA ----------
 async function loadAiConfig() {
   try {
-    const c = await api("/ai/config");
+    const c = await api("/api/ai/config");
     $("#ai-enabled").checked = Boolean(c.enabled);
     $("#ai-provider").value = c.provider || "gemini";
     $("#ai-model").value = c.model || "";
     $("#ai-temperature").value = c.temperature !== undefined ? c.temperature : 0.7;
     $("#ai-auto-send").checked = Boolean(c.autoSend);
+    $("#ai-prompt").value = c.systemPrompt || "";
     $("#ai-key").placeholder = c.hasKey ? "●●●●●●●● (já configurada)" : "Cole sua chave da API";
   } catch (e) { console.error(e); }
 }
 
 async function saveAiConfig() {
   try {
-    const res = await api("/ai/config", {
+    const res = await api("/api/ai/config", {
       method: "POST",
       body: JSON.stringify({
         aiEnabled: $("#ai-enabled").checked,
@@ -540,7 +542,7 @@ async function saveAiConfig() {
 async function testAi() {
   const text = $("#ai-test-text").value || "Oi, tudo bem?";
   try {
-    const res = await api("/ai/test", { method: "POST", body: JSON.stringify({ text }) });
+    const res = await api("/api/ai/test", { method: "POST", body: JSON.stringify({ text }) });
     $("#ai-test-result").textContent = "Resposta: " + (res.reply || "");
     $("#ai-test-result").style.color = "var(--ok)";
   } catch (err) {
@@ -594,10 +596,12 @@ $("#btn-export-stats").addEventListener("click", exportStats);
 
 // ---------- Menu mobile ----------
 $("#btn-menu-toggle").addEventListener("click", () => {
-  $("#menu-backdrop")?.classList.toggle("hidden");
+  const open = $("#sidebar").classList.toggle("open");
+  $("#menu-backdrop").hidden = !open;
 });
 $("#menu-backdrop").addEventListener("click", () => {
-  $("#menu-backdrop")?.classList.add("hidden");
+  $("#sidebar").classList.remove("open");
+  $("#menu-backdrop").hidden = true;
 });
 
 // Clique nos itens do menu
