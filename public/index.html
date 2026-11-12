@@ -64,6 +64,8 @@
       </div>
       <span class="dot" id="status-dot"></span>
     </div>
+    <button class="ghost" id="btn-auth-toggle" title="Entrar">🔑 Entrar</button>
+    <button class="ghost danger hidden" id="btn-logout" title="Sair">🚪 Sair</button>
   </div>
 </header>
 
@@ -72,6 +74,35 @@
 
 <!-- ============ CONTEÚDO ============ -->
 <main class="content">
+  <section id="view-login" class="view">
+    <div class="login-card">
+      <div class="login-brand">
+        <div class="mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.4 9 9 0 0 1-3.6-.7L4 21l1.8-4.5a8.3 8.3 0 0 1-.8-3.6A8.4 8.4 0 0 1 13.4 3 8.4 8.4 0 0 1 21 11.5z"/>
+          </svg>
+        </div>
+        <div>
+          <h2>Mini DM</h2>
+          <p>Entrar no painel</p>
+        </div>
+      </div>
+      <form id="login-form" class="form">
+        <label>
+          <span>Usuário</span>
+          <input id="login-user" type="text" placeholder="admin" autofocus />
+        </label>
+        <label>
+          <span>Senha</span>
+          <input id="login-pass" type="password" placeholder="••••••••" />
+        </label>
+        <div id="login-error" class="alert err hidden"></div>
+        <button class="primary" type="submit">Entrar</button>
+      </form>
+      <p class="muted" style="margin-top:12px;text-align:center">Usuário padrão: <b>admin</b> / Senha: <b>admin123</b></p>
+    </div>
+  </section>
+
   <section id="view-regras" class="view hidden">
     <div class="view-head">
       <h2>Regras</h2>

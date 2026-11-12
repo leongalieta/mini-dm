@@ -16,9 +16,11 @@ const timeAgo = (iso) => {
 };
 
 async function api(path, options = {}) {
+  const headers = { "content-type": "application/json", ...(options.headers || {}) };
+  if (authToken) headers["Authorization"] = "Bearer " + authToken;
   const res = await fetch(path, {
     ...options,
-    headers: { "content-type": "application/json", ...(options.headers || {}) }
+    headers
   });
   let data = {};
   try { data = await res.json(); } catch { /* vazio */ }
@@ -37,6 +39,9 @@ function toast(message) {
 let state = null;
 let tokenInfo = null;
 let logFilter = { q: "", status: "", rule: "", page: 1, pageSize: 50 };
+let authToken = null;
+let authUser = null;
+let loginDisabled = false;
 
 // ---------- Navegação por views (menu) ----------
 function showTab(tab) {
@@ -590,8 +595,112 @@ document.querySelectorAll(".sidebar-item[data-tab]").forEach((b) => {
   b.addEventListener("click", () => showTab(b.dataset.tab));
 });
 
+// ---------- Auth ----------
+async function checkAuthStatus() {
+  try {
+    const res = await api("/api/auth/me");
+    loginDisabled = Boolean(res.disabled);
+    if (loginDisabled) {
+      $("#btn-auth-toggle").classList.add("hidden");
+      $("#btn-logout").classList.add("hidden");
+      showTab("regras");
+      return;
+    }
+    if (res.authenticated && res.user) {
+      authToken = null; // token não persistido no frontend de exemplo; re-login necessário
+      authUser = res.user;
+      $("#btn-auth-toggle").classList.add("hidden");
+      $("#btn-logout").classList.remove("hidden");
+      $("#account-name").textContent = "@" + (authUser.username || "usuário");
+      showTab("regras");
+    } else {
+      authToken = null;
+      authUser = null;
+      $("#btn-auth-toggle").classList.remove("hidden");
+      $("#btn-logout").classList.add("hidden");
+      showTab("login");
+    }
+  } catch (e) {
+    console.error("auth check error", e);
+    showTab("login");
+  }
+}
+
+async function doLogin() {
+  const user = $("#login-user").value.trim();
+  const pass = $("#login-pass").value.trim();
+  if (!user || !pass) return toast("Preencha usuário e senha");
+  try {
+    const res = await api("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username: user, password: pass })
+    });
+    if (res.disabled) {
+      loginDisabled = true;
+      $("#btn-auth-toggle").classList.add("hidden");
+      $("#btn-logout").classList.add("hidden");
+      showTab("regras");
+      toast("Login desativado no servidor");
+      return;
+    }
+    authToken = res.token;
+    authUser = res.user;
+    $("#login-error").classList.add("hidden");
+    $("#btn-auth-toggle").classList.add("hidden");
+    $("#btn-logout").classList.remove("hidden");
+    $("#account-name").textContent = "@" + (authUser.username || "usuário");
+    toast("Bem-vindo, " + (authUser.username || "usuário"));
+    showTab("regras");
+    await loadRules();
+  } catch (err) {
+    $("#login-error").classList.remove("hidden");
+    $("#login-error").textContent = err.message || "Erro ao fazer login";
+    toast(err.message);
+  }
+}
+
+async function doLogout() {
+  try {
+    await api("/api/auth/logout", { method: "POST" });
+  } catch { /* ignora erro de rede */ }
+  authToken = null;
+  authUser = null;
+  loginDisabled = false;
+  $("#login-pass").value = "";
+  $("#login-user").value = "";
+  $("#btn-auth-toggle").classList.remove("hidden");
+  $("#btn-logout").classList.add("hidden");
+  $("#account-name").textContent = "carregando…";
+  showTab("login");
+  toast("Sessão encerrada");
+}
+
+$("#btn-auth-toggle").addEventListener("click", () => {
+  showTab("login");
+});
+$("#btn-logout").addEventListener("click", doLogout);
+$("#login-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  await doLogin();
+});
+
 // ---------- Init ----------
 (async function init() {
+  await checkAuthStatus();
+  if (loginDisabled) {
+    await checkConnection();
+    await loadRules();
+    await loadRulesForFilter();
+    await refreshLogs();
+    await loadStats();
+    await loadSchedules();
+    await loadAiConfig();
+    showTab("regras");
+    setInterval(() => { checkConnection(); loadRules(); }, 8000);
+    setInterval(loadStats, 30000);
+    setInterval(loadSchedules, 30000);
+    return;
+  }
   await checkConnection();
   await loadRules();
   await loadRulesForFilter();
@@ -599,8 +708,6 @@ document.querySelectorAll(".sidebar-item[data-tab]").forEach((b) => {
   await loadStats();
   await loadSchedules();
   await loadAiConfig();
-
-  showTab("regras");
 
   setInterval(() => { checkConnection(); loadRules(); }, 8000);
   setInterval(loadStats, 30000);

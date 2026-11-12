@@ -5,6 +5,15 @@ import { loadStore, saveStore, addLog, markSeen, addSchedule, getDueSchedules, u
 import { matchRule, render } from "./lib/engine.js";
 import { MetaClient, MetaError, resolveAccount } from "./lib/meta.js";
 import { resolveAiSettings, generateReply, aiHistoryFromLog, AiError } from "./lib/ai.js";
+import {
+  initAuthTables,
+  authenticate,
+  createSession,
+  validateSession,
+  destroySession,
+  requireAuth,
+  isLoginDisabled
+} from "./lib/auth.js";
 
 const POLL_TICK_MS = 5000;
 let poller = { timer: null, running: false, lastRun: null, lastError: null, lastSummary: null };
@@ -322,6 +331,11 @@ const server = createServer(async (req, res) => {
     res.setHeader("X-RateLimit-Remaining", String(limit.remaining));
   }
 
+  // Autenticação (isenta auth, health e webhook)
+  if (!isLoginDisabled() && !pathName.startsWith("/api/auth") && pathName !== "/api/health" && pathName !== "/api/webhook") {
+    if (!requireAuth(req, res)) return;
+  }
+
   try {
     if (pathName === "/api/state" && req.method === "GET") {
       return json(res, 200, await publicState());
@@ -341,6 +355,53 @@ const server = createServer(async (req, res) => {
           message: err.message
         });
       }
+    }
+
+    // ---------- Auth ----------
+    if (pathName === "/api/auth/login" && req.method === "POST") {
+      if (isLoginDisabled()) {
+        return json(res, 200, { ok: true, disabled: true, message: "Login desativado" });
+      }
+      const body = await readBody(req);
+      const result = await authenticate(body.username, body.password);
+      if (!result.ok) {
+        return json(res, 401, { error: result.error });
+      }
+      const session = createSession(result.user.id, result.user.username);
+      await poolSessionSave(session.token, result.user.id, result.user.username, session.expiresAt);
+      return json(res, 200, {
+        ok: true,
+        token: session.token,
+        user: { id: result.user.id, username: result.user.username, role: result.user.role },
+        expiresAt: session.expiresAt
+      });
+    }
+
+    if (pathName === "/api/auth/logout" && req.method === "POST") {
+      if (isLoginDisabled()) return json(res, 200, { ok: true });
+      const auth = req.headers.authorization || "";
+      const [scheme, token] = auth.split(" ");
+      if (scheme === "Bearer" && token) {
+        destroySession(token);
+        await poolSessionDelete(token);
+      }
+      return json(res, 200, { ok: true });
+    }
+
+    if (pathName === "/api/auth/me" && req.method === "GET") {
+      if (isLoginDisabled()) {
+        return json(res, 200, { ok: true, disabled: true, user: null });
+      }
+      const auth = req.headers.authorization || "";
+      const [scheme, token] = auth.split(" ");
+      if (!scheme || scheme !== "Bearer" || !token) {
+        return json(res, 200, { ok: false, authenticated: false });
+      }
+      const session = validateSession(token);
+      if (!session) {
+        return json(res, 200, { ok: false, authenticated: false });
+      }
+      return json(res, 200, { ok: true, authenticated: true, user: session });
     }
 
     if (pathName === "/api/rules" && req.method === "POST") {
@@ -951,6 +1012,7 @@ function openBrowser(url) {
 
 server.listen(port, host, async () => {
   console.log(`Mini DM no ar em http://localhost:${port}`);
+  if (!isLoginDisabled()) await initAuthTables();
   const store = await loadStore();
   if (store.settings.live) await startPoller();
   if (process.env.MINI_DM_NO_OPEN !== "1") openBrowser(`http://localhost:${port}`);
