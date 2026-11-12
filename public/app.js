@@ -442,6 +442,7 @@ async function loadSettingsForm() {
     $("#set-media").value = s.settings.maxMediaPerPoll || 3;
     $("#set-public").checked = Boolean(s.settings.replyPublic);
     $("#set-dry").checked = Boolean(s.settings.dryRun);
+    $("#set-target-posts").value = Array.isArray(s.settings.targetPostIds) ? s.settings.targetPostIds.join(", ") : "";
     $("#btn-live").textContent = (!s.settings.dryRun && s.poller?.running) ? "Desligar" : "Ligar";
     $("#btn-live").classList.toggle("on", !s.settings.dryRun && s.poller?.running);
     $("#live-sub").textContent = s.settings.dryRun ? "Desligue a simulação para poder ligar" : (!s.settings.dryRun && s.poller?.running ? "Ligado: lendo comentários novos" : "Lê comentários novos e envia as DMs");
@@ -464,6 +465,8 @@ $("#settings-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const token = $("#set-token").value.trim();
   try {
+    const targetPostsRaw = $("#set-target-posts").value.trim();
+    const targetPostIds = targetPostsRaw ? targetPostsRaw.split(",").map((s) => s.trim()).filter(Boolean) : [];
     const result = await api("/api/settings", {
       method: "POST",
       body: JSON.stringify({
@@ -472,6 +475,7 @@ $("#settings-form").addEventListener("submit", async (e) => {
         maxMediaPerPoll: Number($("#set-media").value) || 3,
         replyPublic: $("#set-public").checked,
         dryRun: $("#set-dry").checked,
+        targetPostIds: targetPostIds,
         token: token || undefined
       })
     });

@@ -169,7 +169,16 @@ async function pollOnce(reason = "agendado") {
   saveStore(store);
 
   try {
-    const media = await client.recentMedia(Number(store.settings.maxMediaPerPoll) || 3);
+    const targetPostIds = Array.isArray(store.settings.targetPostIds)
+      ? store.settings.targetPostIds.filter(String)
+      : [];
+
+    let media;
+    if (targetPostIds.length > 0) {
+      media = targetPostIds.map((id) => ({ id }));
+    } else {
+      media = await client.recentMedia(Number(store.settings.maxMediaPerPoll) || 3);
+    }
     const cutoff = Date.now() - (Number(store.settings.maxPostAgeDays) || 7) * 24 * 3600 * 1000;
 
     for (const post of media) {
@@ -360,7 +369,7 @@ const server = createServer(async (req, res) => {
     if (pathName === "/api/settings" && req.method === "POST") {
       const body = await readBody(req);
       const store = loadStore();
-      const allowed = ["accountUsername", "accountFile", "dryRun", "pollSeconds", "replyPublic", "maxPostAgeDays", "maxMediaPerPoll", "token"];
+      const allowed = ["accountUsername", "accountFile", "dryRun", "pollSeconds", "replyPublic", "maxPostAgeDays", "maxMediaPerPoll", "targetPostIds", "token"];
       let tokenChanged = false;
       for (const key of allowed) {
         if (body[key] !== undefined) {

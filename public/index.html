@@ -222,6 +222,11 @@
       <label class="check"><input type="checkbox" id="set-public" /><span>Responder também no comentário (público)</span></label>
       <label class="check"><input type="checkbox" id="set-dry" /><span>Modo simulação (não envia nada de verdade)</span></label>
       <label><span>Token de acesso do Instagram</span><input id="set-token" type="password" placeholder="Cole o token da Meta" /><small style="color:var(--muted)">Se preenchido, o modo ao vivo será reativado ao salvar.</small></label>
+      <label>
+        <span>Post(s) alvo (IDs separados por vírgula)</span>
+        <input id="set-target-posts" placeholder="17899999999999999, 17900000000000000" />
+        <small style="color:var(--muted)">Deixe vazio para usar posts recentes. O ID do post fica na URL do Instagram.</small>
+      </label>
       <div class="divider"></div>
       <div class="live-row">
         <div><strong>Modo ao vivo</strong><small id="live-sub">Lê comentários novos e envia as DMs</small></div>
