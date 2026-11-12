@@ -24,6 +24,16 @@ async function api(path, options = {}) {
   });
   let data = {};
   try { data = await res.json(); } catch { /* vazio */ }
+  if (res.status === 401) {
+    authToken = null;
+    authUser = null;
+    loginDisabled = false;
+    $("#btn-auth-toggle")?.classList.remove("hidden");
+    $("#btn-logout")?.classList.add("hidden");
+    $("#account-name").textContent = "carregando…";
+    showTab("login");
+    throw new Error("Sessão expirada. Faça login novamente.");
+  }
   if (!res.ok) throw new Error(data.error || `Falha (${res.status})`);
   return data;
 }
