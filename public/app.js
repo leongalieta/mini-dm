@@ -71,6 +71,66 @@ function showTab(tab) {
   if (tab === "agendamentos") { loadSchedules(); }
   if (tab === "ia") { loadAiConfig(); }
   if (tab === "config") { loadSettingsForm(); }
+  if (tab === "posts") { loadPosts(); }
+}
+
+// ---------- Postagens ----------
+async function loadPosts() {
+  const grid = $("#posts-grid");
+  const summary = $("#posts-summary");
+  const empty = $("#posts-empty");
+  if (!grid) return;
+  grid.innerHTML = '<p class="empty">Carregando postagens…</p>';
+  empty.hidden = true;
+  summary.innerHTML = "";
+  try {
+    const d = await api("/api/instagram/posts");
+    if (!d.ok) {
+      grid.innerHTML = "";
+      empty.hidden = false;
+      empty.textContent = d.error || "Não consegui carregar as postagens.";
+      return;
+    }
+    renderPosts(d.posts || []);
+  } catch (err) {
+    grid.innerHTML = "";
+    empty.hidden = false;
+    empty.textContent = err.message;
+  }
+}
+
+function renderPosts(posts) {
+  const totalLikes = posts.reduce((s, p) => s + (p.like_count || 0), 0);
+  const totalComments = posts.reduce((s, p) => s + (p.comments_count || 0), 0);
+  const avg = posts.length ? totalComments / posts.length : 0;
+  $("#posts-summary").innerHTML = `
+    <div class="card post-stat"><span>Posts</span><strong>${posts.length}</strong></div>
+    <div class="card post-stat"><span>Curtidas</span><strong>${totalLikes}</strong></div>
+    <div class="card post-stat"><span>Comentários</span><strong>${totalComments}</strong></div>
+    <div class="card post-stat"><span>Média de comentários</span><strong>${avg.toFixed(1)}</strong></div>`;
+  $("#posts-empty").hidden = posts.length > 0;
+  if (!posts.length) {
+    $("#posts-empty").textContent = "Nenhum post encontrado.";
+    $("#posts-grid").innerHTML = "";
+    return;
+  }
+  $("#posts-grid").innerHTML = posts.map(renderPostCard).join("");
+}
+
+function renderPostCard(p) {
+  const img = p.thumbnail_url || p.media_url || "";
+  const type = p.media_type === "VIDEO" ? "Vídeo" : p.media_type === "CAROUSEL_ALBUM" ? "Carrossel" : "Imagem";
+  const caption = (p.caption || "Sem legenda").replace(/\s+/g, " ").trim().slice(0, 120);
+  const date = p.timestamp ? new Date(p.timestamp).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" }) : "";
+  const link = p.permalink || "https://www.instagram.com/";
+  return `<article class="post-card">
+    <a class="post-thumb" href="${esc(link)}" target="_blank" rel="noopener">${img ? `<img src="${esc(img)}" alt="" loading="lazy" />` : ""}</a>
+    <div class="post-body">
+      <div class="post-meta"><span class="chip channel">${type}</span><span>${esc(date)}</span></div>
+      <p class="post-caption">${esc(caption)}</p>
+      <div class="post-metrics"><span>❤️ ${p.like_count ?? 0}</span><span>💬 ${p.comments_count ?? 0}</span><a href="${esc(link)}" target="_blank" rel="noopener">Ver no Instagram</a></div>
+    </div>
+  </article>`;
 }
 
 function openRule(rule) {

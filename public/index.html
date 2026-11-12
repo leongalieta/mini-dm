@@ -26,6 +26,7 @@
     <button class="sidebar-item" id="menu-testar" data-tab="testar">🧪 Testar agora</button>
     <button class="sidebar-item" id="menu-historico" data-tab="historico">📜 Histórico</button>
     <button class="sidebar-item" id="menu-agendamentos" data-tab="agendamentos">⏰ Agendamentos</button>
+    <button class="sidebar-item" id="menu-posts" data-tab="posts">📸 Postagens</button>
   </div>
 
   <div class="sidebar-group">
@@ -171,6 +172,17 @@
     <h3 style="font-size:15px;margin-top:20px;margin-bottom:8px">Agendados</h3>
     <div id="schedules-list"></div>
     <p class="empty" id="schedules-empty" hidden>Nenhum agendamento ainda.</p>
+  </section>
+
+  <section id="view-posts" class="view hidden">
+    <div class="view-head">
+      <h2>Postagens</h2>
+      <p>Seus posts no Instagram e o desempenho de cada um.</p>
+    </div>
+    <div class="posts-summary" id="posts-summary"></div>
+    <div class="posts-grid" id="posts-grid"></div>
+    <p class="empty" id="posts-empty" hidden></p>
+    <p class="muted" style="margin-top:14px;font-size:12px">Alcance, impressões e salvamentos exigem a permissão <code>instagram_manage_insights</code> no app da Meta. Por enquanto o painel mostra curtidas e comentários.</p>
   </section>
 
   <section id="view-estatisticas" class="view hidden">

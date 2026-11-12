@@ -360,6 +360,33 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    if (pathName === "/api/instagram/posts" && req.method === "GET") {
+      const store = await loadStore();
+      let account;
+      try {
+        account = resolveAccount(store.settings);
+      } catch (err) {
+        return json(res, 200, { ok: false, error: err.message, posts: [] });
+      }
+      if (!account.token || !account.igId) {
+        return json(res, 200, { ok: false, error: "Conta do Instagram não configurada.", posts: [] });
+      }
+      try {
+        const client = new MetaClient(account);
+        const info = await client.validate();
+        const posts = await client.listMedia({ limit: 50 });
+        return json(res, 200, {
+          ok: true,
+          account: info,
+          posts,
+          insights: false,
+          note: "Alcance e impressões exigem a permissão instagram_manage_insights no app da Meta."
+        });
+      } catch (err) {
+        return json(res, 200, { ok: false, error: err.message, posts: [] });
+      }
+    }
+
     // ---------- Auth ----------
     if (pathName === "/api/auth/login" && req.method === "POST") {
       if (isLoginDisabled()) {
