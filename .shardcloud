@@ -1,0 +1,8 @@
+DISPLAY_NAME=Mini DM
+DESCRIPTION=Comentario vira conversa no direct do Instagram. Regras editadas no proprio painel.
+MAIN=index.js
+ENTRYPOINT=index.js
+MEMORY=512
+VERSION=recommended
+SUBDOMAIN=mini-dm
+START=node index.js

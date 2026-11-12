@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mini DM — comentário vira conversa</title>
+<link rel="stylesheet" href="/style.css?v=2" />
+</head>
+<body>
+<div class="glow"></div>
+
+<header class="top">
+  <div class="brand">
+    <div class="mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.4 9 9 0 0 1-3.6-.7L4 21l1.8-4.5a8.3 8.3 0 0 1-.8-3.6A8.4 8.4 0 0 1 13.4 3 8.4 8.4 0 0 1 21 11.5z"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Mini DM</h1>
+      <p>Comentário e direct viram conversa</p>
+    </div>
+  </div>
+
+  <div class="top-right">
+    <button class="ghost" id="btn-refresh" title="Atualizar dados">Atualizar</button>
+    <div class="account" id="account-chip">
+      <span class="avatar" id="avatar">@</span>
+      <div>
+        <strong id="account-name">carregando…</strong>
+        <small id="account-sub">verificando conexão</small>
+      </div>
+      <span class="dot" id="status-dot"></span>
+    </div>
+  </div>
+</header>
+
+<section class="stats">
+  <div class="stat">
+    <span class="stat-label">Regras ativas</span>
+    <strong id="stat-rules">0</strong>
+    <small>palavras que disparam a DM</small>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Ações registradas</span>
+    <strong id="stat-log">0</strong>
+    <small>testes e envios nesta máquina</small>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Conversas iniciadas</span>
+    <strong id="stat-dm">0</strong>
+    <small>DMs enviadas ou simuladas</small>
+  </div>
+  <div class="stat mode">
+    <span class="stat-label">Modo</span>
+    <strong id="stat-mode">Simulação</strong>
+    <small id="stat-mode-sub">nada é enviado de verdade</small>
+  </div>
+</section>
+
+<main class="grid">
+  <section class="card rules">
+    <div class="card-head">
+      <div>
+        <h2>Regras</h2>
+        <p>Quando o comentário ou a mensagem no direct tiver a palavra, respondo na hora.</p>
+      </div>
+      <button class="primary" id="btn-new-rule">+ Nova regra</button>
+    </div>
+
+    <div id="rules-list" class="rules-list"></div>
+    <p class="empty" id="rules-empty" hidden>Nenhuma regra ainda. Crie a primeira ao lado.</p>
+  </section>
+
+  <div class="side">
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h2>Testar agora</h2>
+          <p>Simule um comentário e veja exatamente o que sairia.</p>
+        </div>
+      </div>
+      <form id="test-form" class="form">
+        <label>
+          <span>Testar como</span>
+          <select id="test-channel">
+            <option value="comment">Comentário no post</option>
+            <option value="dm">Mensagem no direct</option>
+          </select>
+        </label>
+        <label>
+          <span>Quem escreveu</span>
+          <input id="test-user" placeholder="cliente" autocomplete="off" />
+        </label>
+        <label>
+          <span>Mensagem</span>
+          <textarea id="test-text" rows="3" placeholder="Quanto custa?"></textarea>
+        </label>
+        <button class="primary" type="submit">Testar</button>
+      </form>
+      <div id="test-result" class="result" hidden></div>
+    </section>
+
+    <section class="card log-card">
+      <div class="card-head">
+        <div>
+          <h2>Histórico</h2>
+          <p>O que aconteceu, mais recente primeiro.</p>
+        </div>
+        <button class="ghost small" id="btn-clear-log">Limpar</button>
+      </div>
+      <div id="log-list" class="log-list"></div>
+      <p class="empty" id="log-empty">Nada por aqui ainda. Faça um teste para ver o fluxo.</p>
+    </section>
+  </div>
+</main>
+
+<footer class="foot">
+  <button class="ghost small" id="btn-settings">Configurações</button>
+  <span id="poller-info"></span>
+</footer>
+
+<div class="overlay" id="rule-overlay" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="rule-title">Nova regra</h2>
+      <button class="icon" id="btn-close-rule" aria-label="Fechar">✕</button>
+    </div>
+    <form id="rule-form" class="form">
+      <input type="hidden" id="rule-id" />
+      <label>
+        <span>Nome da regra</span>
+        <input id="rule-name" placeholder="Pedido de preço" />
+      </label>
+      <label>
+        <span>Onde a regra responde</span>
+        <select id="rule-channel">
+          <option value="comment">Comentário no post</option>
+          <option value="dm">Mensagem no direct</option>
+          <option value="both">Comentário e direct</option>
+        </select>
+      </label>
+      <label>
+        <span>Palavras-chave <em>separe por vírgula</em></span>
+        <input id="rule-keywords" placeholder="preço, valor, quanto custa" />
+      </label>
+      <label>
+        <span>Resposta pública no comentário <em>opcional</em></span>
+        <input id="rule-public" placeholder="Te chamei no direct, {{username}}!" />
+      </label>
+      <label>
+        <span>Mensagem no direct</span>
+        <textarea id="rule-dm" rows="4" placeholder="Oi, {{username}}! Vi seu comentário…"></textarea>
+      </label>
+      <label class="check">
+        <input type="checkbox" id="rule-active" checked />
+        <span>Regra ativa</span>
+      </label>
+      <div class="modal-actions">
+        <button type="button" class="ghost" id="btn-cancel-rule">Cancelar</button>
+        <button type="submit" class="primary">Salvar regra</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="overlay" id="settings-overlay" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Configurações</h2>
+      <button class="icon" id="btn-close-settings" aria-label="Fechar">✕</button>
+    </div>
+    <form id="settings-form" class="form">
+      <label>
+        <span>Conta do Instagram</span>
+        <input id="set-account" placeholder="leoogiro" />
+      </label>
+      <div class="row">
+        <label>
+          <span>Checar a cada (segundos)</span>
+          <input id="set-poll" type="number" min="20" max="600" step="10" />
+        </label>
+        <label>
+          <span>Posts recentes por rodada</span>
+          <input id="set-media" type="number" min="1" max="10" />
+        </label>
+      </div>
+      <label class="check">
+        <input type="checkbox" id="set-public" />
+        <span>Responder também no comentário (público)</span>
+      </label>
+      <label class="check">
+        <input type="checkbox" id="set-dry" />
+        <span>Modo simulação (não envia nada de verdade)</span>
+      </label>
+      <div class="divider"></div>
+      <div class="live-row">
+        <div>
+          <strong>Modo ao vivo</strong>
+          <small id="live-sub">Lê comentários novos e envia as DMs</small>
+        </div>
+        <button type="button" class="ghost" id="btn-live">Ligar</button>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="ghost" id="btn-cancel-settings">Fechar</button>
+        <button type="submit" class="primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+<script src="/app.js?v=2"></script>
+</body>
+</html>

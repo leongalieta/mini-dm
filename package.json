@@ -1,0 +1,10 @@
+{
+  "name": "mini-dm",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Comentario vira DM: automacao enxuta para Instagram",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

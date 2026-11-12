@@ -1,0 +1,102 @@
+{
+  "settings": {
+    "accountUsername": "leoogiro",
+    "accountFile": "",
+    "token": "",
+    "dryRun": false,
+    "live": false,
+    "pollSeconds": 60,
+    "replyPublic": true,
+    "maxPostAgeDays": 7,
+    "maxMediaPerPoll": 3
+  },
+  "rules": [
+    {
+      "id": "r_preco",
+      "name": "Pedido de preço",
+      "channel": "comment",
+      "keywords": [
+        "preço",
+        "valor",
+        "quanto custa",
+        "quanto é",
+        "orçamento",
+        "quanto fica"
+      ],
+      "active": false,
+      "publicReply": "Te chamei no direct, {{username}}!",
+      "dmText": "Oi, {{username}}! Vi seu comentário aqui. Te mando os valores e as opções agora mesmo. Se quiser adiantar, me conta rapidinho o que você precisa."
+    },
+    {
+      "id": "r_grnwnlk",
+      "name": "Link no direct",
+      "channel": "dm",
+      "keywords": [
+        "link",
+        "manda o link",
+        "quero o link"
+      ],
+      "active": true,
+      "publicReply": "",
+      "dmText": "Oi, {{username}}, aqui está o link: https://wa.me/554491457224?text=Quero%20o%20Funil%201%20Minuto"
+    }
+  ],
+  "seen": {},
+  "log": [
+    {
+      "id": "g7q4ym4m",
+      "at": "2026-11-10T21:54:42.637Z",
+      "mode": "teste direct",
+      "username": "mara",
+      "comment": "link",
+      "keyword": "link",
+      "ruleName": "Link no direct",
+      "status": "simulado",
+      "detail": "Oi, mara, aqui está o link: https://wa.me/554491457224?text=Quero%20o%20Funil%201%20Minuto"
+    },
+    {
+      "id": "fg39tpoe",
+      "at": "2026-11-10T21:54:42.391Z",
+      "mode": "teste",
+      "username": "mara",
+      "comment": "manda o link",
+      "keyword": "link",
+      "ruleName": "Pedido de link",
+      "status": "simulado",
+      "detail": "Oi, mara, aqui está o link: https://wa.me/554491457224?text=Quero%20o%20Funil%201%20Minuto"
+    },
+    {
+      "id": "1ee6a3n6",
+      "at": "2026-11-10T21:25:21.513Z",
+      "mode": "ao vivo",
+      "username": "leonardogalieta",
+      "comment": "Link",
+      "keyword": "link",
+      "ruleName": "Pedido de link",
+      "status": "enviado",
+      "detail": "Oi, leonardogalieta, aqui está o link: https://wa.me/554491457224?text=Quero%20o%20Funil%201%20Minuto"
+    },
+    {
+      "id": "mvnwd80f",
+      "at": "2026-11-10T21:07:33.611Z",
+      "mode": "ao vivo",
+      "username": "leonardogalieta",
+      "comment": "Link",
+      "keyword": "link",
+      "ruleName": "Pedido de link",
+      "status": "erro",
+      "detail": "exemplo.com\n\nNão foi possível compartilhar sua mensagem, pois esse link viola nossos Padrões da Comunidade"
+    },
+    {
+      "id": "925xvanw",
+      "at": "2026-11-10T21:06:01.930Z",
+      "mode": "ao vivo",
+      "username": "leonardogalieta",
+      "comment": "Link",
+      "keyword": "link",
+      "ruleName": "Pedido de link",
+      "status": "erro",
+      "detail": "exemplo.com\n\nNão foi possível compartilhar sua mensagem, pois esse link viola nossos Padrões da Comunidade"
+    }
+  ]
+}
