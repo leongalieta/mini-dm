@@ -572,19 +572,27 @@ $("#settings-overlay").addEventListener("click", (e) => {
 $("#settings-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   try {
-    await api("/api/settings", {
+    const token = $("#set-token").value.trim();
+    const result = await api("/api/settings", {
       method: "POST",
       body: JSON.stringify({
         accountUsername: $("#set-account").value.trim(),
         pollSeconds: Number($("#set-poll").value) || 60,
         maxMediaPerPoll: Number($("#set-media").value) || 3,
         replyPublic: $("#set-public").checked,
-        dryRun: $("#set-dry").checked
+        dryRun: $("#set-dry").checked,
+        token: token || undefined
       })
     });
     await refresh(true);
     await checkConnection();
-    toast("Configurações salvas.");
+    if (result.reactivated) {
+      toast("Token válido! Modo ao vivo reativado automaticamente.");
+    } else if (token && result.validate && !result.validate.ok) {
+      toast("Token salvo, mas inválido: " + (result.validate.message || ""));
+    } else {
+      toast("Configurações salvas.");
+    }
   } catch (err) {
     toast(err.message);
   }

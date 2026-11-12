@@ -320,15 +320,49 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req);
       const store = loadStore();
       const allowed = ["accountUsername", "accountFile", "dryRun", "pollSeconds", "replyPublic", "maxPostAgeDays", "maxMediaPerPoll", "token"];
+      let tokenChanged = false;
       for (const key of allowed) {
         if (body[key] !== undefined) {
-          if (key === "token") continue;
+          if (key === "token") {
+            if (body.token && String(body.token).trim()) {
+              store.settings.token = String(body.token).trim();
+              tokenChanged = true;
+            }
+            continue;
+          }
           store.settings[key] = body[key];
         }
       }
-      if (body.token && String(body.token).trim()) store.settings.token = String(body.token).trim();
       saveStore(store);
-      return json(res, 200, { ok: true, settings: { ...store.settings, token: store.settings.token ? "***" : "" } });
+
+      let reactivated = false;
+      let validateInfo = null;
+      if (tokenChanged && !store.settings.dryRun) {
+        try {
+          const account = resolveAccount(store.settings);
+          const client = new MetaClient(account);
+          validateInfo = await client.validate();
+          if (!store.settings.live) {
+            store.settings.live = true;
+            saveStore(store);
+            startPoller();
+            reactivated = true;
+          }
+        } catch (err) {
+          validateInfo = {
+            ok: false,
+            expired: err instanceof MetaError && err.expired,
+            message: err.message
+          };
+        }
+      }
+
+      return json(res, 200, {
+        ok: true,
+        reactivated,
+        validate: validateInfo,
+        settings: { ...store.settings, token: store.settings.token ? "***" : "" }
+      });
     }
 
     if (pathName === "/api/live" && req.method === "POST") {
