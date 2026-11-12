@@ -1,7 +1,7 @@
 import path from "node:path";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
-import { loadStore, saveStore, addLog, markSeen } from "./lib/store.js";
+import { loadStore, saveStore, addLog, markSeen, addSchedule, getDueSchedules, updateScheduleStatus, removeSchedule, exportLogs } from "./lib/store.js";
 import { matchRule, render } from "./lib/engine.js";
 import { MetaClient, MetaError, resolveAccount } from "./lib/meta.js";
 
@@ -101,6 +101,46 @@ async function pollOnce(reason = "agendado") {
 
   const client = new MetaClient(account);
   const summary = { scanned: 0, matched: 0, dmSent: 0, publicReplied: 0, errors: 0 };
+
+  // ---------- Processar agendamentos vencidos ----------
+  const due = getDueSchedules(store);
+  for (const sched of due) {
+    try {
+      const ctx = { username: sched.username || "amigo", keyword: sched.keyword };
+      const dmText = render(sched.comment, ctx);
+      if (sched.channel === "dm" || sched.channel === "both") {
+        await client.sendMessage(client.igId, dmText);
+      }
+      if (sched.channel === "comment" || sched.channel === "both") {
+        // sem comentário alvo para agendamento simples; registra apenas
+      }
+      updateScheduleStatus(store, sched.id, "sent", dmText);
+      addLog(store, {
+        mode: "agendado",
+        username: sched.username,
+        comment: sched.comment,
+        keyword: sched.keyword,
+        ruleName: sched.ruleName,
+        status: "enviado",
+        detail: dmText
+      });
+      summary.dmSent += 1;
+    } catch (err) {
+      updateScheduleStatus(store, sched.id, "error", err.message);
+      addLog(store, {
+        mode: "agendado",
+        username: sched.username,
+        comment: sched.comment,
+        keyword: sched.keyword,
+        ruleName: sched.ruleName,
+        status: "erro",
+        detail: err.message
+      });
+      summary.errors += 1;
+    }
+  }
+  saveStore(store);
+
   try {
     const media = await client.recentMedia(Number(store.settings.maxMediaPerPoll) || 3);
     const cutoff = Date.now() - (Number(store.settings.maxPostAgeDays) || 7) * 24 * 3600 * 1000;
@@ -354,6 +394,105 @@ const server = createServer(async (req, res) => {
     if (pathName === "/api/poll" && req.method === "POST") {
       const result = await pollOnce("manual");
       return json(res, 200, result);
+    }
+
+    // ---------- Exportar logs ----------
+    if (pathName === "/api/log/export" && req.method === "GET") {
+      const store = loadStore();
+      const csv = exportLogs(store);
+      res.writeHead(200, {
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition": 'attachment; filename="mini-dm-logs.csv"',
+        "cache-control": "no-store"
+      });
+      return res.end(csv);
+    }
+
+    // ---------- Estatísticas ----------
+    if (pathName === "/api/stats" && req.method === "GET") {
+      const store = loadStore();
+      const rules = store.rules || [];
+      const log = store.log || [];
+      const schedules = store.schedules || [];
+
+      const totalRules = rules.length;
+      const activeRules = rules.filter((r) => r.active).length;
+      const totalLog = log.length;
+      const sentLog = log.filter((l) => l.status === "enviado").length;
+      const simulatedLog = log.filter((l) => l.status === "simulado").length;
+      const errorLog = log.filter((l) => l.status === "erro").length;
+
+      const byRule = {};
+      for (const entry of log) {
+        const key = entry.ruleName || "sem regra";
+        if (!byRule[key]) byRule[key] = { total: 0, enviado: 0, simulado: 0, erro: 0 };
+        byRule[key].total += 1;
+        if (entry.status === "enviado") byRule[key].enviado += 1;
+        if (entry.status === "simulado") byRule[key].simulado += 1;
+        if (entry.status === "erro") byRule[key].erro += 1;
+      }
+
+      const byDay = {};
+      for (const entry of log) {
+        const day = entry.at ? entry.at.slice(0, 10) : "sem data";
+        if (!byDay[day]) byDay[day] = 0;
+        byDay[day] += 1;
+      }
+      const days = Object.entries(byDay).sort((a, b) => a[0].localeCompare(b[0]));
+
+      const pendingSchedules = schedules.filter((s) => s.status === "pending").length;
+      const sentSchedules = schedules.filter((s) => s.status === "sent").length;
+
+      return json(res, 200, {
+        totalRules,
+        activeRules,
+        totalLog,
+        sentLog,
+        simulatedLog,
+        errorLog,
+        byRule,
+        days,
+        pendingSchedules,
+        sentSchedules,
+        totalSchedules: schedules.length
+      });
+    }
+
+    // ---------- Agendamentos ----------
+    if (pathName === "/api/schedules" && req.method === "GET") {
+      const store = loadStore();
+      return json(res, 200, { schedules: store.schedules || [] });
+    }
+
+    if (pathName === "/api/schedules" && req.method === "POST") {
+      const body = await readBody(req);
+      const store = loadStore();
+      const schedule = addSchedule(store, {
+        username: body.username,
+        comment: body.comment,
+        channel: body.channel || "dm",
+        runAt: body.runAt,
+        ruleName: body.ruleName || "",
+        keyword: body.keyword || ""
+      });
+      saveStore(store);
+      return json(res, 200, { ok: true, schedule });
+    }
+
+    if (pathName.startsWith("/api/schedules/") && req.method === "DELETE") {
+      const id = decodeURIComponent(pathName.slice("/api/schedules/".length));
+      const store = loadStore();
+      const ok = removeSchedule(store, id);
+      saveStore(store);
+      return json(res, 200, { ok });
+    }
+
+    if (pathName.startsWith("/api/schedules/") && pathName.endsWith("/cancel") && req.method === "POST") {
+      const id = decodeURIComponent(pathName.slice("/api/schedules/".length, -"/cancel".length));
+      const store = loadStore();
+      const schedule = updateScheduleStatus(store, id, "cancelled");
+      saveStore(store);
+      return json(res, 200, { ok: !!schedule, schedule });
     }
 
     if (pathName === "/api/webhook" && req.method === "GET") {

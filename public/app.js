@@ -314,6 +314,109 @@ $("#test-form").addEventListener("submit", async (e) => {
   }
 });
 
+// ---------- Exportar logs ----------
+async function exportLogs() {
+  try {
+    const res = await fetch("/api/log/export");
+    if (!res.ok) throw new Error("Falha ao exportar");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "mini-dm-logs.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast("Logs exportados.");
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+// ---------- Estatísticas ----------
+async function loadStats() {
+  try {
+    const s = await api("/api/stats");
+    $("#stat-total-rules").textContent = s.totalRules;
+    $("#stat-active-rules").textContent = s.activeRules;
+    $("#stat-total-log").textContent = s.totalLog;
+    $("#stat-sent").textContent = s.sentLog;
+    $("#stat-simulated").textContent = s.simulatedLog;
+    $("#stat-error").textContent = s.errorLog;
+
+    const rulesList = $("#stats-by-rule");
+    rulesList.innerHTML = Object.entries(s.byRule || {})
+      .map(([name, d]) => `<tr><td>${esc(name)}</td><td>${d.total}</td><td>${d.enviado}</td><td>${d.simulado}</td><td>${d.erro}</td></tr>`)
+      .join("");
+
+    const daysList = $("#stats-by-day");
+    daysList.innerHTML = s.days
+      .map(([day, count]) => `<tr><td>${day}</td><td>${count}</td></tr>`)
+      .join("");
+
+    $("#stat-pending-schedules").textContent = s.pendingSchedules;
+    $("#stat-sent-schedules").textContent = s.sentSchedules;
+  } catch (e) { console.error(e); }
+}
+
+// ---------- Agendamentos ----------
+async function loadSchedules() {
+  try {
+    const d = await api("/api/schedules");
+    const list = $("#schedules-list");
+    const schedules = d.schedules || [];
+    list.innerHTML = schedules
+      .map((s) => {
+        const statusClass = s.status === "pending" ? "pending" : s.status === "sent" ? "sent" : s.status === "cancelled" ? "cancelled" : "error";
+        return `
+          <div class="schedule-item">
+            <div class="schedule-info">
+              <div class="schedule-user">@${esc(s.username || "—")}</div>
+              <div class="schedule-msg">${esc(s.comment || "")}</div>
+              <div class="schedule-meta">
+                <span class="pill ${statusClass}">${esc(s.status)}</span>
+                <span>${new Date(s.runAt).toLocaleString("pt-BR")}</span>
+                <span>${esc(s.channel)}</span>
+              </div>
+            </div>
+            <div class="schedule-actions">
+              <button class="ghost small" onclick="cancelSchedule('${esc(s.id)}')">Cancelar</button>
+            </div>
+          </div>`;
+      })
+      .join("");
+    $("#schedules-empty").hidden = schedules.length > 0;
+  } catch (e) { console.error(e); }
+}
+
+async function saveSchedule() {
+  const username = $("#sched-user").value.trim();
+  const comment = $("#sched-msg").value.trim();
+  const channel = $("#sched-channel").value;
+  const runAt = $("#sched-at").value;
+  if (!username || !comment || !runAt) return toast("Preencha usuário, mensagem e data/hora.");
+  try {
+    await api("/api/schedules", {
+      method: "POST",
+      body: JSON.stringify({ username, comment, channel, runAt })
+    });
+    $("#schedule-overlay").hidden = true;
+    $("#sched-form").reset();
+    await loadSchedules();
+    await loadStats();
+    toast("Agendado.");
+  } catch (err) { toast(err.message); }
+}
+
+async function cancelSchedule(id) {
+  if (!confirm("Cancelar este agendamento?")) return;
+  try {
+    await api(`/api/schedules/${id}/cancel`, { method: "POST" });
+    await loadSchedules();
+    await loadStats();
+    toast("Agendamento cancelado.");
+  } catch (err) { toast(err.message); }
+}
+
 function openSettings() {
   fillSettings();
   $("#settings-overlay").hidden = false;
@@ -382,11 +485,45 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     closeRule();
     $("#settings-overlay").hidden = true;
+    $("#schedule-overlay").hidden = true;
+    $("#stats-overlay").hidden = true;
   }
+});
+
+// ---------- Export ----------
+$("#btn-export").addEventListener("click", exportLogs);
+
+// ---------- Stats ----------
+$("#btn-stats").addEventListener("click", () => {
+  $("#stats-overlay").hidden = false;
+  loadStats();
+});
+$("#btn-close-stats").addEventListener("click", () => ($("#stats-overlay").hidden = true));
+$("#stats-overlay").addEventListener("click", (e) => {
+  if (e.target === $("#stats-overlay")) $("#stats-overlay").hidden = true;
+});
+
+// ---------- Schedules ----------
+$("#btn-schedules").addEventListener("click", () => {
+  $("#schedule-overlay").hidden = false;
+  loadSchedules();
+});
+$("#btn-close-schedule").addEventListener("click", () => ($("#schedule-overlay").hidden = true));
+$("#btn-cancel-schedule").addEventListener("click", () => ($("#schedule-overlay").hidden = true));
+$("#schedule-overlay").addEventListener("click", (e) => {
+  if (e.target === $("#schedule-overlay")) $("#schedule-overlay").hidden = true;
+});
+$("#sched-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  await saveSchedule();
 });
 
 (async function init() {
   await refresh(true);
   await checkConnection();
+  await loadStats();
+  await loadSchedules();
   setInterval(refresh, 8000);
+  setInterval(loadStats, 30000);
+  setInterval(loadSchedules, 30000);
 })();

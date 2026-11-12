@@ -24,6 +24,9 @@
 
   <div class="top-right">
     <button class="ghost" id="btn-refresh" title="Atualizar dados">Atualizar</button>
+    <button class="ghost" id="btn-export" title="Exportar logs">Exportar</button>
+    <button class="ghost" id="btn-stats" title="Estatísticas">Estatísticas</button>
+    <button class="ghost" id="btn-schedules" title="Agendamentos">Agendamentos</button>
     <div class="account" id="account-chip">
       <span class="avatar" id="avatar">@</span>
       <div>
@@ -50,6 +53,11 @@
     <span class="stat-label">Conversas iniciadas</span>
     <strong id="stat-dm">0</strong>
     <small>DMs enviadas ou simuladas</small>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Agendados pendentes</span>
+    <strong id="stat-pending-schedules">0</strong>
+    <small>disparos agendados</small>
   </div>
   <div class="stat mode">
     <span class="stat-label">Modo</span>
@@ -108,6 +116,7 @@
           <p>O que aconteceu, mais recente primeiro.</p>
         </div>
         <button class="ghost small" id="btn-clear-log">Limpar</button>
+        <button class="ghost small" id="btn-export">Exportar CSV</button>
       </div>
       <div id="log-list" class="log-list"></div>
       <p class="empty" id="log-empty">Nada por aqui ainda. Faça um teste para ver o fluxo.</p>
@@ -206,6 +215,87 @@
         <button type="submit" class="primary">Salvar</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- Estatísticas -->
+<div class="overlay" id="stats-overlay" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Estatísticas</h2>
+      <button class="icon" id="btn-close-stats" aria-label="Fechar">✕</button>
+    </div>
+    <div class="grid" style="margin-top:14px">
+      <div class="card">
+        <h3 style="font-size:15px;margin-top:0">Resumo</h3>
+        <div class="row" style="margin-top:10px">
+          <div><strong>Regras totais</strong><span id="stat-total-rules" style="float:right">0</span></div>
+          <div><strong>Regras ativas</strong><span id="stat-active-rules" style="float:right">0</span></div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <div><strong>Enviadas</strong><span id="stat-sent" style="float:right">0</span></div>
+          <div><strong>Simuladas</strong><span id="stat-simulated" style="float:right">0</span></div>
+          <div><strong>Erros</strong><span id="stat-error" style="float:right">0</span></div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <div><strong>Agendados pendentes</strong><span id="stat-pending-schedules" style="float:right">0</span></div>
+          <div><strong>Agendados enviados</strong><span id="stat-sent-schedules" style="float:right">0</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="font-size:15px;margin-top:0">Por regra</h3>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:10px">
+          <thead><tr><th style="text-align:left">Regra</th><th>Total</th><th>Enviado</th><th>Simulado</th><th>Erro</th></tr></thead>
+          <tbody id="stats-by-rule"></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="font-size:15px;margin-top:0">Por dia</h3>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:10px">
+          <thead><tr><th style="text-align:left">Data</th><th>Ações</th></tr></thead>
+          <tbody id="stats-by-day"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Agendamentos -->
+<div class="overlay" id="schedule-overlay" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Agendamentos</h2>
+      <button class="icon" id="btn-close-schedule" aria-label="Fechar">✕</button>
+    </div>
+    <form id="sched-form" class="form" style="margin-bottom:16px">
+      <label>
+        <span>Usuário</span>
+        <input id="sched-user" placeholder="cliente" />
+      </label>
+      <label>
+        <span>Mensagem</span>
+        <textarea id="sched-msg" rows="2" placeholder="O que enviar?"></textarea>
+      </label>
+      <label>
+        <span>Canal</span>
+        <select id="sched-channel">
+          <option value="dm">Direct</option>
+          <option value="comment">Comentário</option>
+          <option value="both">Comentário + Direct</option>
+        </select>
+      </label>
+      <label>
+        <span>Data e hora</span>
+        <input id="sched-at" type="datetime-local" />
+      </label>
+      <div class="modal-actions">
+        <button type="button" class="ghost" id="btn-cancel-schedule">Cancelar</button>
+        <button type="submit" class="primary">Agendar</button>
+      </div>
+    </form>
+    <h3 style="font-size:15px;margin-top:0;margin-bottom:8px">Agendados</h3>
+    <div id="schedules-list"></div>
+    <p class="empty" id="schedules-empty" hidden>Nenhum agendamento ainda.</p>
   </div>
 </div>
 

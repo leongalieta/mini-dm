@@ -292,6 +292,31 @@ input::placeholder, textarea::placeholder { color: #5e6472; }
   z-index: 80;
 }
 
+/* Agendamentos */
+.schedule-item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #1c1f27;
+}
+.schedule-item:last-child { border-bottom: 0; }
+.schedule-info { flex: 1; min-width: 0; }
+.schedule-user { font-size: 12px; color: var(--soft); margin-bottom: 2px; }
+.schedule-msg { font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 4px; }
+.schedule-meta { display: flex; gap: 8px; font-size: 11px; color: var(--muted); }
+.schedule-actions { display: flex; gap: 6px; flex: none; }
+
+.pill.pending { color: var(--warn); background: rgba(255, 182, 72, 0.10); }
+.pill.sent { color: var(--ok); background: rgba(53, 211, 154, 0.10); }
+.pill.cancelled { color: var(--muted); background: rgba(141, 147, 161, 0.10); }
+.pill.error { color: var(--err); background: rgba(255, 93, 93, 0.10); }
+
+/* Tabelas de estatísticas */
+.stats-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+.stats-table th { text-align: left; color: var(--muted); font-size: 11px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.stats-table td { padding: 6px 8px; border-bottom: 1px solid #1c1f27; }
+
 @media (max-width: 980px) {
   .grid { grid-template-columns: 1fr; }
   .stats { grid-template-columns: repeat(2, 1fr); }
