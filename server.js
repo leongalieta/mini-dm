@@ -19,6 +19,7 @@ import {
 
 const POLL_TICK_MS = 5000;
 let poller = { timer: null, running: false, lastRun: null, lastError: null, lastSummary: null };
+let postsCache = { at: 0, data: null };
 
 // ---------- Rate limiting simples ----------
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minuto
@@ -371,17 +372,21 @@ const server = createServer(async (req, res) => {
       if (!account.token || !account.igId) {
         return json(res, 200, { ok: false, error: "Conta do Instagram não configurada.", posts: [] });
       }
+      if (postsCache.data && Date.now() - postsCache.at < 120000) {
+        return json(res, 200, postsCache.data);
+      }
       try {
         const client = new MetaClient(account);
         const info = await client.validate();
         const posts = await client.listMedia({ limit: 50 });
-        return json(res, 200, {
+        const payload = {
           ok: true,
           account: info,
           posts,
-          insights: false,
-          note: "Alcance e impressões exigem a permissão instagram_manage_insights no app da Meta."
-        });
+          insights: posts.some((p) => p.insights)
+        };
+        postsCache = { at: Date.now(), data: payload };
+        return json(res, 200, payload);
       } catch (err) {
         return json(res, 200, { ok: false, error: err.message, posts: [] });
       }

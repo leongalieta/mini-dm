@@ -102,12 +102,12 @@ async function loadPosts() {
 function renderPosts(posts) {
   const totalLikes = posts.reduce((s, p) => s + (p.like_count || 0), 0);
   const totalComments = posts.reduce((s, p) => s + (p.comments_count || 0), 0);
-  const avg = posts.length ? totalComments / posts.length : 0;
+  const totalReach = posts.reduce((s, p) => s + (p.insights?.reach || 0), 0);
   $("#posts-summary").innerHTML = `
     <div class="card post-stat"><span>Posts</span><strong>${posts.length}</strong></div>
     <div class="card post-stat"><span>Curtidas</span><strong>${totalLikes}</strong></div>
     <div class="card post-stat"><span>Comentários</span><strong>${totalComments}</strong></div>
-    <div class="card post-stat"><span>Média de comentários</span><strong>${avg.toFixed(1)}</strong></div>`;
+    <div class="card post-stat"><span>Alcance</span><strong>${totalReach}</strong></div>`;
   $("#posts-empty").hidden = posts.length > 0;
   if (!posts.length) {
     $("#posts-empty").textContent = "Nenhum post encontrado.";
@@ -128,7 +128,7 @@ function renderPostCard(p) {
     <div class="post-body">
       <div class="post-meta"><span class="chip channel">${type}</span><span>${esc(date)}</span></div>
       <p class="post-caption">${esc(caption)}</p>
-      <div class="post-metrics"><span>❤️ ${p.like_count ?? 0}</span><span>💬 ${p.comments_count ?? 0}</span><a href="${esc(link)}" target="_blank" rel="noopener">Ver no Instagram</a></div>
+      <div class="post-metrics"><span>❤️ ${p.like_count ?? 0}</span><span>💬 ${p.comments_count ?? 0}</span>${p.insights ? `<span>👁 ${p.insights.reach ?? 0}</span><span>🔖 ${p.insights.saved ?? 0}</span>` : ""}<a href="${esc(link)}" target="_blank" rel="noopener">Ver no Instagram</a></div>
     </div>
   </article>`;
 }
