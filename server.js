@@ -9,6 +9,32 @@ import { resolveAiSettings, generateReply, aiHistoryFromLog, AiError } from "./l
 const POLL_TICK_MS = 5000;
 let poller = { timer: null, running: false, lastRun: null, lastError: null, lastSummary: null };
 
+// ---------- Rate limiting simples ----------
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minuto
+const RATE_LIMIT_MAX = 60; // 60 requisições por minuto por IP
+const rateLimitMap = new Map(); // ip -> { count, resetAt }
+
+function rateLimit(ip) {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return { allowed: true, remaining: RATE_LIMIT_MAX - 1 };
+  }
+  if (entry.count >= RATE_LIMIT_MAX) {
+    return { allowed: false, remaining: 0, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
+  }
+  entry.count += 1;
+  return { allowed: true, remaining: RATE_LIMIT_MAX - entry.count };
+}
+
+function clientIp(req) {
+  const fwd = req.headers['x-forwarded-for'];
+  if (fwd) return fwd.split(',')[0].trim();
+  const socket = req.socket;
+  return socket ? (socket.remoteAddress || 'unknown') : 'unknown';
+}
+
 function publicState() {
   const store = loadStore();
   let account = null;
@@ -273,6 +299,20 @@ const server = createServer(async (req, res) => {
 
   if (pathName !== "/api/webhook" && !checkAuth(req, res)) return;
 
+  // Rate limiting (isenta webhook da Meta)
+  if (pathName !== "/api/webhook") {
+    const limit = rateLimit(clientIp(req));
+    if (!limit.allowed) {
+      res.writeHead(429, {
+        "content-type": "application/json; charset=utf-8",
+        "retry-after": String(limit.retryAfter || 60),
+        "cache-control": "no-store"
+      });
+      return res.end(JSON.stringify({ error: "Muitas requisições. Tente novamente em " + (limit.retryAfter || 60) + " segundos." }));
+    }
+    res.setHeader("X-RateLimit-Remaining", String(limit.remaining));
+  }
+
   try {
     if (pathName === "/api/state" && req.method === "GET") {
       return json(res, 200, publicState());
@@ -504,6 +544,20 @@ const server = createServer(async (req, res) => {
         pendingSchedules,
         sentSchedules,
         totalSchedules: schedules.length
+      });
+    }
+
+    // ---------- Health check ----------
+    if (pathName === "/api/health" && req.method === "GET") {
+      const store = loadStore();
+      return json(res, 200, {
+        ok: true,
+        service: "mini-dm",
+        version: "1.0.0",
+        uptime: process.uptime(),
+        memory: process.memoryUsage().rss,
+        rules: store.rules ? store.rules.length : 0,
+        logs: store.log ? store.log.length : 0
       });
     }
 
