@@ -22,6 +22,8 @@
 * { box-sizing: border-box; }
 
 [hidden] { display: none !important; }
+/* A classe .hidden é usada pelo JS (overlay de login, botões, backdrop). */
+.hidden { display: none !important; }
 
 html, body {
   margin: 0;
