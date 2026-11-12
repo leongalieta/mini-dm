@@ -35,8 +35,8 @@ function clientIp(req) {
   return socket ? (socket.remoteAddress || 'unknown') : 'unknown';
 }
 
-function publicState() {
-  const store = loadStore();
+async function publicState() {
+  const store = await loadStore();
   let account = null;
   try {
     const a = resolveAccount(store.settings);
@@ -111,7 +111,7 @@ function cleanRule(input, existing) {
 }
 
 async function pollOnce(reason = "agendado") {
-  const store = loadStore();
+  const store = await loadStore();
   if (store.settings.dryRun) {
     poller.lastRun = new Date().toISOString();
     poller.lastSummary = "Simulacao ligada: nada e enviado de verdade.";
@@ -166,7 +166,7 @@ async function pollOnce(reason = "agendado") {
       summary.errors += 1;
     }
   }
-  saveStore(store);
+  await saveStore(store);
 
   try {
     const targetPostIds = Array.isArray(store.settings.targetPostIds)
@@ -252,7 +252,7 @@ async function pollOnce(reason = "agendado") {
     poller.lastRun = new Date().toISOString();
     poller.lastError = poller.lastError && poller.lastError.startsWith("Token") ? poller.lastError : null;
     poller.lastSummary = `${reason}: ${summary.scanned} comentarios novos, ${summary.dmSent} DMs, ${summary.errors} erros.`;
-    saveStore(store);
+    await saveStore(store);
     return { ok: true, summary: summary };
   } catch (err) {
     summary.errors += 1;
@@ -263,14 +263,14 @@ async function pollOnce(reason = "agendado") {
       stopPoller();
     }
     addLog(store, { mode: "ao vivo", status: "erro", detail: err.message });
-    saveStore(store);
+    await saveStore(store);
     return { ok: false, error: err.message };
   }
 }
 
-function startPoller() {
+async function startPoller() {
   stopPoller();
-  const store = loadStore();
+  const store = await loadStore();
   const seconds = Math.max(20, Number(store.settings.pollSeconds) || 60);
   poller.timer = setInterval(() => {
     pollOnce("agendado").catch(() => {});
@@ -324,11 +324,11 @@ const server = createServer(async (req, res) => {
 
   try {
     if (pathName === "/api/state" && req.method === "GET") {
-      return json(res, 200, publicState());
+      return json(res, 200, await publicState());
     }
 
     if (pathName === "/api/check" && req.method === "POST") {
-      const store = loadStore();
+      const store = await loadStore();
       try {
         const account = resolveAccount(store.settings);
         const client = new MetaClient(account);
@@ -345,7 +345,7 @@ const server = createServer(async (req, res) => {
 
     if (pathName === "/api/rules" && req.method === "POST") {
       const body = await readBody(req);
-      const store = loadStore();
+      const store = await loadStore();
       const existing = store.rules.find((r) => r.id === body.id);
       const rule = cleanRule(body, existing);
       if (!rule.keywords.length) return json(res, 400, { error: "Informe pelo menos uma palavra-chave." });
@@ -354,21 +354,21 @@ const server = createServer(async (req, res) => {
       } else {
         store.rules.push(rule);
       }
-      saveStore(store);
+      await saveStore(store);
       return json(res, 200, { ok: true, rule });
     }
 
     if (pathName.startsWith("/api/rules/") && req.method === "DELETE") {
       const id = decodeURIComponent(pathName.slice("/api/rules/".length));
-      const store = loadStore();
+      const store = await loadStore();
       store.rules = store.rules.filter((r) => r.id !== id);
-      saveStore(store);
+      await saveStore(store);
       return json(res, 200, { ok: true });
     }
 
     if (pathName === "/api/settings" && req.method === "POST") {
       const body = await readBody(req);
-      const store = loadStore();
+      const store = await loadStore();
       const allowed = ["accountUsername", "accountFile", "dryRun", "pollSeconds", "replyPublic", "maxPostAgeDays", "maxMediaPerPoll", "targetPostIds", "token"];
       let tokenChanged = false;
       for (const key of allowed) {
@@ -383,7 +383,7 @@ const server = createServer(async (req, res) => {
           store.settings[key] = body[key];
         }
       }
-      saveStore(store);
+      await saveStore(store);
 
       let reactivated = false;
       let validateInfo = null;
@@ -394,8 +394,8 @@ const server = createServer(async (req, res) => {
           validateInfo = await client.validate();
           if (!store.settings.live) {
             store.settings.live = true;
-            saveStore(store);
-            startPoller();
+            await saveStore(store);
+            await startPoller();
             reactivated = true;
           }
         } catch (err) {
@@ -417,18 +417,18 @@ const server = createServer(async (req, res) => {
 
     if (pathName === "/api/live" && req.method === "POST") {
       const body = await readBody(req);
-      const store = loadStore();
+      const store = await loadStore();
       const enabled = Boolean(body.enabled);
       if (enabled) {
         if (store.settings.dryRun) {
           return json(res, 400, { error: "Desligue a simulacao antes de ativar o modo ao vivo." });
         }
         store.settings.live = true;
-        saveStore(store);
-        startPoller();
+        await saveStore(store);
+        await startPoller();
       } else {
         store.settings.live = false;
-        saveStore(store);
+        await saveStore(store);
         stopPoller();
       }
       return json(res, 200, { ok: true, live: Boolean(poller.timer) });
@@ -436,14 +436,14 @@ const server = createServer(async (req, res) => {
 
     if (pathName === "/api/test" && req.method === "POST") {
       const body = await readBody(req);
-      const store = loadStore();
+      const store = await loadStore();
       const text = String(body.text || "");
       const channel = body.channel === "dm" ? "dm" : "comment";
       const username = String(body.username || "").replace(/^@/, "") || "cliente";
       const found = matchRule(text, store.rules, channel);
       if (!found) {
         addLog(store, { mode: "teste", username, comment: text, status: "sem regra" });
-        saveStore(store);
+        await saveStore(store);
         return json(res, 200, { matched: false, channel });
       }
       const ctx = { username, keyword: found.keyword };
@@ -464,14 +464,14 @@ const server = createServer(async (req, res) => {
         status: "simulado",
         detail: result.dmText
       });
-      saveStore(store);
+      await saveStore(store);
       return json(res, 200, result);
     }
 
     if (pathName === "/api/log" && req.method === "DELETE") {
-      const store = loadStore();
+      const store = await loadStore();
       store.log = [];
-      saveStore(store);
+      await saveStore(store);
       return json(res, 200, { ok: true });
     }
 
@@ -482,7 +482,7 @@ const server = createServer(async (req, res) => {
 
     // ---------- Exportar logs ----------
     if (pathName === "/api/log/export" && req.method === "GET") {
-      const store = loadStore();
+      const store = await loadStore();
       const csv = exportLogs(store);
       res.writeHead(200, {
         "content-type": "text/csv; charset=utf-8",
@@ -494,7 +494,7 @@ const server = createServer(async (req, res) => {
 
     // ---------- Logs filtrados/paginados ----------
     if (pathName === "/api/log/filter" && req.method === "GET") {
-      const store = loadStore();
+      const store = await loadStore();
       const q = url.searchParams;
       const result = filterLogs(store, {
         query: q.get("q") || "",
@@ -508,7 +508,7 @@ const server = createServer(async (req, res) => {
 
     // ---------- Estatísticas ----------
     if (pathName === "/api/stats" && req.method === "GET") {
-      const store = loadStore();
+      const store = await loadStore();
       const rules = store.rules || [];
       const log = store.log || [];
       const schedules = store.schedules || [];
@@ -558,7 +558,7 @@ const server = createServer(async (req, res) => {
 
     // ---------- Health check ----------
     if (pathName === "/api/health" && req.method === "GET") {
-      const store = loadStore();
+      const store = await loadStore();
       return json(res, 200, {
         ok: true,
         service: "mini-dm",
@@ -572,7 +572,7 @@ const server = createServer(async (req, res) => {
 
     // ---------- Exportar estatísticas ----------
     if (pathName === "/api/stats/export" && req.method === "GET") {
-      const store = loadStore();
+      const store = await loadStore();
       const csv = exportStats(store);
       res.writeHead(200, {
         "content-type": "text/csv; charset=utf-8",
@@ -584,13 +584,13 @@ const server = createServer(async (req, res) => {
 
     // ---------- Lista de regras (para filtro) ----------
     if (pathName === "/api/rules-list" && req.method === "GET") {
-      const store = loadStore();
+      const store = await loadStore();
       return json(res, 200, { rules: getRulesList(store) });
     }
 
     // ---------- Agente de IA ----------
     if (pathName === "/api/ai/config" && req.method === "GET") {
-      const store = loadStore();
+      const store = await loadStore();
       const ai = resolveAiSettings(store.settings);
       return json(res, 200, {
         enabled: ai.enabled,
@@ -605,14 +605,14 @@ const server = createServer(async (req, res) => {
 
     if (pathName === "/api/ai/config" && req.method === "POST") {
       const body = await readBody(req);
-      const store = loadStore();
+      const store = await loadStore();
       const allowed = ["aiEnabled", "aiProvider", "aiApiKey", "aiModel", "aiSystemPrompt", "aiAutoSend", "aiTemperature"];
       for (const key of allowed) {
         if (body[key] !== undefined) {
           store.settings[key] = key === "aiApiKey" && !body[key] ? store.settings.aiApiKey : body[key];
         }
       }
-      saveStore(store);
+      await saveStore(store);
       const ai = resolveAiSettings(store.settings);
       return json(res, 200, {
         ok: true,
@@ -627,7 +627,7 @@ const server = createServer(async (req, res) => {
 
     if (pathName === "/api/ai/test" && req.method === "POST") {
       const body = await readBody(req);
-      const store = loadStore();
+      const store = await loadStore();
       const history = aiHistoryFromLog(store.log, 12);
       const text = await generateReply([{ direction: "recebida", body: body.text || "Oi" }], store.settings);
       addLog(store, {
@@ -638,13 +638,13 @@ const server = createServer(async (req, res) => {
         status: "simulado",
         detail: text
       });
-      saveStore(store);
+      await saveStore(store);
       return json(res, 200, { ok: true, reply: text });
     }
 
     if (pathName === "/api/ai/reply" && req.method === "POST") {
       const body = await readBody(req);
-      const store = loadStore();
+      const store = await loadStore();
       const history = aiHistoryFromLog(store.log, 12);
       history.push({ direction: "recebida", body: body.text || "" });
       const text = await generateReply(history, store.settings);
@@ -653,13 +653,13 @@ const server = createServer(async (req, res) => {
 
     // ---------- Agendamentos ----------
     if (pathName === "/api/schedules" && req.method === "GET") {
-      const store = loadStore();
+      const store = await loadStore();
       return json(res, 200, { schedules: store.schedules || [] });
     }
 
     if (pathName === "/api/schedules" && req.method === "POST") {
       const body = await readBody(req);
-      const store = loadStore();
+      const store = await loadStore();
       const schedule = addSchedule(store, {
         username: body.username,
         comment: body.comment,
@@ -668,14 +668,14 @@ const server = createServer(async (req, res) => {
         ruleName: body.ruleName || "",
         keyword: body.keyword || ""
       });
-      saveStore(store);
+      await saveStore(store);
       return json(res, 200, { ok: true, schedule });
     }
 
     if (pathName.startsWith("/api/schedules/") && req.method === "PUT") {
       const id = decodeURIComponent(pathName.slice("/api/schedules/".length));
       const body = await readBody(req);
-      const store = loadStore();
+      const store = await loadStore();
       const schedule = store.schedules.find((s) => s.id === id);
       if (!schedule) return json(res, 404, { error: "Agendamento não encontrado" });
       if (body.username !== undefined) schedule.username = String(body.username).trim();
@@ -684,23 +684,23 @@ const server = createServer(async (req, res) => {
       if (body.runAt !== undefined) schedule.runAt = body.runAt;
       if (body.ruleName !== undefined) schedule.ruleName = String(body.ruleName || "").trim();
       if (body.keyword !== undefined) schedule.keyword = String(body.keyword || "").trim();
-      saveStore(store);
+      await saveStore(store);
       return json(res, 200, { ok: true, schedule });
     }
 
     if (pathName.startsWith("/api/schedules/") && req.method === "DELETE") {
       const id = decodeURIComponent(pathName.slice("/api/schedules/".length));
-      const store = loadStore();
+      const store = await loadStore();
       const ok = removeSchedule(store, id);
-      saveStore(store);
+      await saveStore(store);
       return json(res, 200, { ok });
     }
 
     if (pathName.startsWith("/api/schedules/") && pathName.endsWith("/cancel") && req.method === "POST") {
       const id = decodeURIComponent(pathName.slice("/api/schedules/".length, -"/cancel".length));
-      const store = loadStore();
+      const store = await loadStore();
       const schedule = updateScheduleStatus(store, id, "cancelled");
-      saveStore(store);
+      await saveStore(store);
       return json(res, 200, { ok: !!schedule, schedule });
     }
 
@@ -718,7 +718,7 @@ const server = createServer(async (req, res) => {
 
     if (pathName === "/api/webhook" && req.method === "POST") {
       const body = await readBody(req);
-      const store = loadStore();
+      const store = await loadStore();
       const comments = [];
       const messages = [];
 
@@ -895,7 +895,7 @@ const server = createServer(async (req, res) => {
         results.push(item);
       }
 
-      saveStore(store);
+      await saveStore(store);
       return json(res, 200, {
         received: true,
         events: comments.length + messages.length,
@@ -949,9 +949,9 @@ function openBrowser(url) {
   }
 }
 
-server.listen(port, host, () => {
+server.listen(port, host, async () => {
   console.log(`Mini DM no ar em http://localhost:${port}`);
-  const store = loadStore();
-  if (store.settings.live) startPoller();
+  const store = await loadStore();
+  if (store.settings.live) await startPoller();
   if (process.env.MINI_DM_NO_OPEN !== "1") openBrowser(`http://localhost:${port}`);
 });
