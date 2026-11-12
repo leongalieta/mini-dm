@@ -1,7 +1,7 @@
 import path from "node:path";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
-import { loadStore, saveStore, addLog, markSeen, addSchedule, getDueSchedules, updateScheduleStatus, removeSchedule, exportLogs } from "./lib/store.js";
+import { loadStore, saveStore, addLog, markSeen, addSchedule, getDueSchedules, updateScheduleStatus, removeSchedule, exportLogs, filterLogs, getRulesList, exportStats } from "./lib/store.js";
 import { matchRule, render } from "./lib/engine.js";
 import { MetaClient, MetaError, resolveAccount } from "./lib/meta.js";
 
@@ -408,6 +408,20 @@ const server = createServer(async (req, res) => {
       return res.end(csv);
     }
 
+    // ---------- Logs filtrados/paginados ----------
+    if (pathName === "/api/log/filter" && req.method === "GET") {
+      const store = loadStore();
+      const q = url.searchParams;
+      const result = filterLogs(store, {
+        query: q.get("q") || "",
+        status: q.get("status") || "",
+        rule: q.get("rule") || "",
+        page: Number(q.get("page")) || 1,
+        pageSize: Number(q.get("pageSize")) || 50
+      });
+      return json(res, 200, result);
+    }
+
     // ---------- Estatísticas ----------
     if (pathName === "/api/stats" && req.method === "GET") {
       const store = loadStore();
@@ -458,6 +472,24 @@ const server = createServer(async (req, res) => {
       });
     }
 
+    // ---------- Exportar estatísticas ----------
+    if (pathName === "/api/stats/export" && req.method === "GET") {
+      const store = loadStore();
+      const csv = exportStats(store);
+      res.writeHead(200, {
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition": 'attachment; filename="mini-dm-estatisticas.csv"',
+        "cache-control": "no-store"
+      });
+      return res.end(csv);
+    }
+
+    // ---------- Lista de regras (para filtro) ----------
+    if (pathName === "/api/rules-list" && req.method === "GET") {
+      const store = loadStore();
+      return json(res, 200, { rules: getRulesList(store) });
+    }
+
     // ---------- Agendamentos ----------
     if (pathName === "/api/schedules" && req.method === "GET") {
       const store = loadStore();
@@ -475,6 +507,22 @@ const server = createServer(async (req, res) => {
         ruleName: body.ruleName || "",
         keyword: body.keyword || ""
       });
+      saveStore(store);
+      return json(res, 200, { ok: true, schedule });
+    }
+
+    if (pathName.startsWith("/api/schedules/") && req.method === "PUT") {
+      const id = decodeURIComponent(pathName.slice("/api/schedules/".length));
+      const body = await readBody(req);
+      const store = loadStore();
+      const schedule = store.schedules.find((s) => s.id === id);
+      if (!schedule) return json(res, 404, { error: "Agendamento não encontrado" });
+      if (body.username !== undefined) schedule.username = String(body.username).trim();
+      if (body.comment !== undefined) schedule.comment = String(body.comment).trim();
+      if (body.channel !== undefined) schedule.channel = body.channel;
+      if (body.runAt !== undefined) schedule.runAt = body.runAt;
+      if (body.ruleName !== undefined) schedule.ruleName = String(body.ruleName || "").trim();
+      if (body.keyword !== undefined) schedule.keyword = String(body.keyword || "").trim();
       saveStore(store);
       return json(res, 200, { ok: true, schedule });
     }

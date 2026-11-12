@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Mini DM — comentário vira conversa</title>
-<link rel="stylesheet" href="/style.css?v=2" />
+<link rel="stylesheet" href="/style.css?v=3" />
 </head>
 <body>
 <div class="glow"></div>
@@ -18,23 +18,24 @@
     </div>
     <div>
       <h1>Mini DM</h1>
-      <p>Comentário e direct viram conversa</p>
+      <p>Comentário vira conversa no direct</p>
     </div>
   </div>
 
-  <div class="top-right">
+  <div class="top-actions">
     <button class="ghost" id="btn-refresh" title="Atualizar dados">Atualizar</button>
-    <button class="ghost" id="btn-export" title="Exportar logs">Exportar</button>
+    <button class="ghost" id="btn-export" title="Exportar logs">Exportar CSV</button>
     <button class="ghost" id="btn-stats" title="Estatísticas">Estatísticas</button>
     <button class="ghost" id="btn-schedules" title="Agendamentos">Agendamentos</button>
-    <div class="account" id="account-chip">
-      <span class="avatar" id="avatar">@</span>
-      <div>
-        <strong id="account-name">carregando…</strong>
-        <small id="account-sub">verificando conexão</small>
-      </div>
-      <span class="dot" id="status-dot"></span>
+  </div>
+
+  <div class="account" id="account-chip">
+    <span class="avatar" id="avatar">@</span>
+    <div>
+      <strong id="account-name">carregando…</strong>
+      <small id="account-sub">verificando conexão</small>
     </div>
+    <span class="dot" id="status-dot"></span>
   </div>
 </header>
 
@@ -71,13 +72,13 @@
     <div class="card-head">
       <div>
         <h2>Regras</h2>
-        <p>Quando o comentário ou a mensagem no direct tiver a palavra, respondo na hora.</p>
+        <p>Quando o comentário ou a mensagem no direct bater uma palavra-chave, respondo na hora.</p>
       </div>
       <button class="primary" id="btn-new-rule">+ Nova regra</button>
     </div>
 
     <div id="rules-list" class="rules-list"></div>
-    <p class="empty" id="rules-empty" hidden>Nenhuma regra ainda. Crie a primeira ao lado.</p>
+    <p class="empty" id="rules-empty" hidden>Nenhuma regra ainda. Crie a primeira.</p>
   </section>
 
   <div class="side">
@@ -115,8 +116,10 @@
           <h2>Histórico</h2>
           <p>O que aconteceu, mais recente primeiro.</p>
         </div>
-        <button class="ghost small" id="btn-clear-log">Limpar</button>
-        <button class="ghost small" id="btn-export">Exportar CSV</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="ghost small" id="btn-clear-log">Limpar</button>
+          <button class="ghost small" id="btn-export-panel">Exportar CSV</button>
+        </div>
       </div>
       <div id="log-list" class="log-list"></div>
       <p class="empty" id="log-empty">Nada por aqui ainda. Faça um teste para ver o fluxo.</p>
@@ -129,6 +132,7 @@
   <span id="poller-info"></span>
 </footer>
 
+<!-- Editor de regra -->
 <div class="overlay" id="rule-overlay" hidden>
   <div class="modal">
     <div class="modal-head">
@@ -173,6 +177,7 @@
   </div>
 </div>
 
+<!-- Configurações -->
 <div class="overlay" id="settings-overlay" hidden>
   <div class="modal">
     <div class="modal-head">
@@ -223,7 +228,10 @@
   <div class="modal">
     <div class="modal-head">
       <h2>Estatísticas</h2>
-      <button class="icon" id="btn-close-stats" aria-label="Fechar">✕</button>
+      <div style="display:flex;gap:8px">
+        <button class="ghost small" id="btn-export-stats">Exportar CSV</button>
+        <button class="icon" id="btn-close-stats" aria-label="Fechar">✕</button>
+      </div>
     </div>
     <div class="grid" style="margin-top:14px">
       <div class="card">
@@ -238,20 +246,20 @@
           <div><strong>Erros</strong><span id="stat-error" style="float:right">0</span></div>
         </div>
         <div class="row" style="margin-top:8px">
-          <div><strong>Agendados pendentes</strong><span id="stat-pending-schedules" style="float:right">0</span></div>
+          <div><strong>Agendados pendentes</strong><span id="stat-pending-schedules-modal" style="float:right">0</span></div>
           <div><strong>Agendados enviados</strong><span id="stat-sent-schedules" style="float:right">0</span></div>
         </div>
       </div>
       <div class="card">
         <h3 style="font-size:15px;margin-top:0">Por regra</h3>
-        <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:10px">
+        <table class="stats-table" style="margin-top:10px">
           <thead><tr><th style="text-align:left">Regra</th><th>Total</th><th>Enviado</th><th>Simulado</th><th>Erro</th></tr></thead>
           <tbody id="stats-by-rule"></tbody>
         </table>
       </div>
       <div class="card">
         <h3 style="font-size:15px;margin-top:0">Por dia</h3>
-        <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:10px">
+        <table class="stats-table" style="margin-top:10px">
           <thead><tr><th style="text-align:left">Data</th><th>Ações</th></tr></thead>
           <tbody id="stats-by-day"></tbody>
         </table>
@@ -299,7 +307,45 @@
   </div>
 </div>
 
+<!-- Edição de agendamento -->
+<div class="overlay" id="edit-schedule-overlay" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="edit-sched-title">Editar agendamento</h2>
+      <button class="icon" id="btn-close-edit-schedule" aria-label="Fechar">✕</button>
+    </div>
+    <form id="edit-sched-form" class="form" style="margin-bottom:16px">
+      <input type="hidden" id="edit-sched-id" />
+      <label>
+        <span>Usuário</span>
+        <input id="edit-sched-user" placeholder="cliente" />
+      </label>
+      <label>
+        <span>Mensagem</span>
+        <textarea id="edit-sched-msg" rows="2" placeholder="O que enviar?"></textarea>
+      </label>
+      <label>
+        <span>Canal</span>
+        <select id="edit-sched-channel">
+          <option value="dm">Direct</option>
+          <option value="comment">Comentário</option>
+          <option value="both">Comentário + Direct</option>
+        </select>
+      </label>
+      <label>
+        <span>Data e hora</span>
+        <input id="edit-sched-at" type="datetime-local" />
+      </label>
+      <div class="modal-actions">
+        <button type="button" class="ghost" id="btn-close-edit-schedule2">Fechar</button>
+        <button type="submit" class="primary">Salvar alterações</button>
+        <button type="button" class="ghost danger" id="btn-delete-sched">Excluir</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="toast" id="toast" hidden></div>
-<script src="/app.js?v=2"></script>
+<script src="/app.js?v=3"></script>
 </body>
 </html>

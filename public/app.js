@@ -3,6 +3,7 @@ const $$ = (sel) => [...document.querySelectorAll(sel)];
 
 let state = null;
 let tokenInfo = null;
+let logFilter = { q: "", status: "", rule: "", page: 1, pageSize: 50 };
 
 const esc = (s) =>
   String(s ?? "")
@@ -129,10 +130,30 @@ function renderRules() {
   $("#rules-empty").hidden = (state.rules || []).length > 0;
 }
 
-function renderLog() {
+async function loadLogs() {
+  try {
+    const q = new URLSearchParams();
+    if (logFilter.q) q.set("q", logFilter.q);
+    if (logFilter.status) q.set("status", logFilter.status);
+    if (logFilter.rule) q.set("rule", logFilter.rule);
+    q.set("page", logFilter.page);
+    q.set("pageSize", logFilter.pageSize);
+    const result = await api("/api/log/filter?" + q);
+    return result;
+  } catch (e) {
+    console.error(e);
+    return { items: [], total: 0, page: 1, pageSize: 50, totalPages: 1 };
+  }
+}
+
+function renderLog(items) {
   const list = $("#log-list");
-  const entries = state.log || [];
-  list.innerHTML = entries
+  if (!items || !items.length) {
+    list.innerHTML = "";
+    $("#log-empty").hidden = false;
+    return;
+  }
+  list.innerHTML = items
     .map((item) => {
       const initials = (item.username || "?").replace("@", "")[0]?.toUpperCase() || "?";
       return `
@@ -150,16 +171,72 @@ function renderLog() {
         </div>`;
     })
     .join("");
-  $("#log-empty").hidden = entries.length > 0;
+  $("#log-empty").hidden = true;
 }
 
-function render() {
+function renderLogControls(total) {
+  const wrap = $("#log-controls");
+  if (!wrap) return;
+  const totalPages = Math.ceil(total / logFilter.pageSize);
+  wrap.innerHTML = `
+    <div class="log-pagination">
+      <span>Página <strong>${logFilter.page}</strong> de <strong>${Math.max(1, totalPages)}</strong> · ${total} registro(s)</span>
+      <div class="log-pages">
+        <button class="ghost small" ${logFilter.page <= 1 ? "disabled" : ""} onclick="prevPage()">◀ Anterior</button>
+        <button class="ghost small" ${logFilter.page >= totalPages || totalPages <= 1 ? "disabled" : ""} onclick="nextPage()">Próximo ▶</button>
+      </div>
+    </div>
+  <div class="log-filters" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">
+    <input type="text" id="log-search" placeholder="Buscar..." value="${esc(logFilter.q || "")}">
+    <select id="log-status-filter"><option value="">Todos os status</option><option value="enviado" ${logFilter.status === "enviado" ? "selected" : ""}>Enviado</option><option value="simulado" ${logFilter.status === "simulado" ? "selected" : ""}>Simulado</option><option value="erro" ${logFilter.status === "erro" ? "selected" : ""}>Erro</option></select>
+    <select id="log-rule-filter"><option value="">Todas as regras</option></select>
+  </div>
+`;
+  $("#log-search")?.addEventListener("input", (e) => { logFilter.q = e.target.value; logFilter.page = 1; refreshLogs(); });
+  $("#log-status-filter")?.addEventListener("change", (e) => { logFilter.status = e.target.value; logFilter.page = 1; refreshLogs(); });
+  $("#log-rule-filter")?.addEventListener("change", (e) => { logFilter.rule = e.target.value; logFilter.page = 1; refreshLogs(); });
+}
+
+async function refreshLogs() {
+  renderLogHeader();
+  const result = await loadLogs();
+  renderLog(result.items);
+  renderLogControls(result.total);
+}
+
+window.prevPage = async () => { if (logFilter.page > 1) { logFilter.page--; await refreshLogs(); } };
+window.nextPage = async () => { logFilter.page++; await refreshLogs(); };
+
+function renderLogHeader() {
+  const wrap = $("#log-list");
+  if (!wrap) return;
+  const existing = wrap.querySelector(".log-controls-wrap");
+  if (existing) return;
+  const div = document.createElement("div");
+  div.className = "log-controls-wrap";
+  div.innerHTML = `<div id="log-filters"></div><div id="log-controls"></div>`;
+  wrap.parentNode.insertBefore(div, wrap.nextSibling);
+}
+
+async function render() {
   if (!state) return;
   setAccountChip();
   renderStats();
   renderRules();
-  renderLog();
+  await refreshLogs();
   updateLiveButton();
+}
+
+async function loadRulesForFilter() {
+  try {
+    const res = await api("/api/rules-list");
+    const rules = res.rules || [];
+    const sel = $("#log-rule-filter");
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Todas as regras</option>' + rules.map((r) => `<option value="${esc(r)}" ${r === logFilter.rule ? "selected" : ""}>${esc(r)}</option>`).join("");
+    sel.value = cur || "";
+  } catch (e) { console.error(e); }
 }
 
 function updateLiveButton() {
@@ -332,6 +409,23 @@ async function exportLogs() {
   }
 }
 
+async function exportStats() {
+  try {
+    const res = await fetch("/api/stats/export");
+    if (!res.ok) throw new Error("Falha ao exportar estatísticas");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "mini-dm-estatisticas.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast("Estatísticas exportadas.");
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
 // ---------- Estatísticas ----------
 async function loadStats() {
   try {
@@ -368,7 +462,7 @@ async function loadSchedules() {
       .map((s) => {
         const statusClass = s.status === "pending" ? "pending" : s.status === "sent" ? "sent" : s.status === "cancelled" ? "cancelled" : "error";
         return `
-          <div class="schedule-item">
+          <div class="schedule-item" onclick="openEditSchedule('${esc(s.id)}')">
             <div class="schedule-info">
               <div class="schedule-user">@${esc(s.username || "—")}</div>
               <div class="schedule-msg">${esc(s.comment || "")}</div>
@@ -379,7 +473,8 @@ async function loadSchedules() {
               </div>
             </div>
             <div class="schedule-actions">
-              <button class="ghost small" onclick="cancelSchedule('${esc(s.id)}')">Cancelar</button>
+              <button class="ghost small" onclick="event.stopPropagation(); cancelSchedule('${esc(s.id)}')">Cancelar</button>
+              ${s.status === "pending" ? `<button class="ghost small" onclick="event.stopPropagation(); openEditSchedule('${esc(s.id)}')">Editar</button>` : ""}
             </div>
           </div>`;
       })
@@ -414,6 +509,51 @@ async function cancelSchedule(id) {
     await loadSchedules();
     await loadStats();
     toast("Agendamento cancelado.");
+  } catch (err) { toast(err.message); }
+}
+
+async function openEditSchedule(id) {
+  try {
+    const d = await api("/api/schedules");
+    const s = (d.schedules || []).find((x) => x.id === id);
+    if (!s) return;
+    $("#edit-sched-id").value = s.id;
+    $("#edit-sched-user").value = s.username || "";
+    $("#edit-sched-msg").value = s.comment || "";
+    $("#edit-sched-channel").value = s.channel || "dm";
+    $("#edit-sched-at").value = s.runAt ? s.runAt.slice(0, 16) : "";
+    $("#edit-schedule-overlay").hidden = false;
+  } catch (err) { toast(err.message); }
+}
+
+async function saveEditSchedule() {
+  const id = $("#edit-sched-id").value;
+  const username = $("#edit-sched-user").value.trim();
+  const comment = $("#edit-sched-msg").value.trim();
+  const channel = $("#edit-sched-channel").value;
+  const runAt = $("#edit-sched-at").value;
+  if (!username || !comment || !runAt) return toast("Preencha usuário, mensagem e data/hora.");
+  try {
+    await api(`/api/schedules/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ username, comment, channel, runAt })
+    });
+    $("#edit-schedule-overlay").hidden = true;
+    await loadSchedules();
+    await loadStats();
+    toast("Agendamento atualizado.");
+  } catch (err) { toast(err.message); }
+}
+
+async function deleteSchedule() {
+  const id = $("#edit-sched-id").value;
+  if (!confirm("Excluir este agendamento?")) return;
+  try {
+    await api(`/api/schedules/${id}`, { method: "DELETE" });
+    $("#edit-schedule-overlay").hidden = true;
+    await loadSchedules();
+    await loadStats();
+    toast("Agendamento excluído.");
   } catch (err) { toast(err.message); }
 }
 
@@ -481,17 +621,9 @@ $("#btn-refresh").addEventListener("click", async () => {
   toast("Atualizado.");
 });
 
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") {
-    closeRule();
-    $("#settings-overlay").hidden = true;
-    $("#schedule-overlay").hidden = true;
-    $("#stats-overlay").hidden = true;
-  }
-});
-
 // ---------- Export ----------
 $("#btn-export").addEventListener("click", exportLogs);
+$("#btn-export-panel").addEventListener("click", exportLogs);
 
 // ---------- Stats ----------
 $("#btn-stats").addEventListener("click", () => {
@@ -499,6 +631,7 @@ $("#btn-stats").addEventListener("click", () => {
   loadStats();
 });
 $("#btn-close-stats").addEventListener("click", () => ($("#stats-overlay").hidden = true));
+$("#btn-export-stats").addEventListener("click", exportStats);
 $("#stats-overlay").addEventListener("click", (e) => {
   if (e.target === $("#stats-overlay")) $("#stats-overlay").hidden = true;
 });
@@ -518,9 +651,32 @@ $("#sched-form").addEventListener("submit", async (e) => {
   await saveSchedule();
 });
 
+$("#btn-close-edit-schedule").addEventListener("click", () => ($("#edit-schedule-overlay").hidden = true));
+$("#btn-close-edit-schedule2").addEventListener("click", () => ($("#edit-schedule-overlay").hidden = true));
+$("#edit-schedule-overlay").addEventListener("click", (e) => {
+  if (e.target === $("#edit-schedule-overlay")) $("#edit-schedule-overlay").hidden = true;
+});
+$("#edit-sched-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  await saveEditSchedule();
+});
+$("#btn-delete-sched").addEventListener("click", deleteSchedule);
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    closeRule();
+    $("#settings-overlay").hidden = true;
+    $("#schedule-overlay").hidden = true;
+    $("#stats-overlay").hidden = true;
+    $("#edit-schedule-overlay").hidden = true;
+  }
+});
+
 (async function init() {
   await refresh(true);
   await checkConnection();
+  await loadRulesForFilter();
+  await refreshLogs();
   await loadStats();
   await loadSchedules();
   setInterval(refresh, 8000);
