@@ -535,6 +535,7 @@ const server = createServer(async (req, res) => {
         model: ai.model,
         systemPrompt: ai.systemPrompt,
         autoSend: ai.autoSend,
+        temperature: ai.temperature,
         hasKey: Boolean(ai.key)
       });
     }
@@ -542,7 +543,7 @@ const server = createServer(async (req, res) => {
     if (pathName === "/api/ai/config" && req.method === "POST") {
       const body = await readBody(req);
       const store = loadStore();
-      const allowed = ["aiEnabled", "aiProvider", "aiApiKey", "aiModel", "aiSystemPrompt", "aiAutoSend"];
+      const allowed = ["aiEnabled", "aiProvider", "aiApiKey", "aiModel", "aiSystemPrompt", "aiAutoSend", "aiTemperature"];
       for (const key of allowed) {
         if (body[key] !== undefined) {
           store.settings[key] = key === "aiApiKey" && !body[key] ? store.settings.aiApiKey : body[key];
@@ -556,6 +557,7 @@ const server = createServer(async (req, res) => {
         provider: ai.provider,
         model: ai.model,
         autoSend: ai.autoSend,
+        temperature: ai.temperature,
         hasKey: Boolean(ai.key)
       });
     }

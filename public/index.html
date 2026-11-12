@@ -195,6 +195,7 @@
       </label>
       <label><span>Provedor</span><select id="ai-provider"><option value="gemini">Google Gemini</option><option value="openai">OpenAI</option></select></label>
       <label><span>Modelo</span><input id="ai-model" placeholder="gemini-1.5-flash" /></label>
+      <label><span>Temperatura (0 a 1)</span><input id="ai-temperature" type="number" min="0" max="1" step="0.1" placeholder="0.7" /></label>
       <label><span>Chave da API</span><input id="ai-key" type="password" placeholder="Cole sua chave da API" /><small style="color:var(--muted)">Não é armazenada em texto simples no log.</small></label>
       <label><span>Instruções do agente</span><textarea id="ai-prompt" rows="4" placeholder="Você é um assistente de atendimento..."></textarea></label>
       <label class="check"><input type="checkbox" id="ai-auto-send" /><span>Enviar resposta automaticamente (sem sugerir primeiro)</span></label>

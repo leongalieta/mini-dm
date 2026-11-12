@@ -494,6 +494,7 @@ async function loadAiConfig() {
     $("#ai-enabled").checked = Boolean(c.enabled);
     $("#ai-provider").value = c.provider || "gemini";
     $("#ai-model").value = c.model || "";
+    $("#ai-temperature").value = c.temperature !== undefined ? c.temperature : 0.7;
     $("#ai-auto-send").checked = Boolean(c.autoSend);
     $("#ai-key").placeholder = c.hasKey ? "●●●●●●●● (já configurada)" : "Cole sua chave da API";
   } catch (e) { console.error(e); }
@@ -509,7 +510,8 @@ async function saveAiConfig() {
         aiApiKey: $("#ai-key").value.trim() || undefined,
         aiModel: $("#ai-model").value.trim(),
         aiSystemPrompt: $("#ai-prompt").value.trim(),
-        aiAutoSend: $("#ai-auto-send").checked
+        aiAutoSend: $("#ai-auto-send").checked,
+        aiTemperature: Number($("#ai-temperature").value) || 0.7
       })
     });
     toast(res.ok ? "Agente de IA salvo." : "Erro ao salvar agente de IA.");
