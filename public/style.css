@@ -369,6 +369,42 @@ input::placeholder, textarea::placeholder { color: #5e6472; }
 .alert.err { background: rgba(255, 93, 93, 0.10); border-color: rgba(255, 93, 93, 0.4); color: var(--err); }
 .alert.hidden { display: none; }
 
+/* ---------- Login overlay ---------- */
+#login-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgba(3, 4, 6, 0.8);
+  backdrop-filter: blur(8px);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  animation: fadeIn .25s ease;
+}
+.login-card {
+  max-width: 400px;
+  width: 100%;
+  padding: 40px 32px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+.login-brand { margin-bottom: 24px; }
+.login-brand .mark {
+  width: 48px; height: 48px; margin: 0 auto 14px;
+  border-radius: 12px; display: grid; place-items: center;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 8px 24px rgba(255, 77, 103, 0.35);
+}
+.login-brand .mark svg { width: 26px; height: 26px; }
+.login-brand h2 { margin: 0 0 6px; font-size: 20px; }
+.login-brand p { margin: 0; color: var(--muted); font-size: 13px; }
+.login-card .form { margin-bottom: 16px; }
+.login-card .form label { margin-bottom: 14px; }
+
 /* Responsividade */
 @media (max-width: 900px) {
   body { padding-top: 64px; }

@@ -31,7 +31,7 @@ async function api(path, options = {}) {
     $("#btn-auth-toggle")?.classList.remove("hidden");
     $("#btn-logout")?.classList.add("hidden");
     $("#account-name").textContent = "carregando…";
-    showTab("login");
+    $("#login-overlay")?.classList.remove("hidden");
     throw new Error("Sessão expirada. Faça login novamente.");
   }
   if (!res.ok) throw new Error(data.error || `Falha (${res.status})`);
@@ -613,6 +613,7 @@ async function checkAuthStatus() {
     if (loginDisabled) {
       $("#btn-auth-toggle").classList.add("hidden");
       $("#btn-logout").classList.add("hidden");
+      $("#login-overlay").classList.add("hidden");
       showTab("regras");
       return;
     }
@@ -622,17 +623,18 @@ async function checkAuthStatus() {
       $("#btn-auth-toggle").classList.add("hidden");
       $("#btn-logout").classList.remove("hidden");
       $("#account-name").textContent = "@" + (authUser.username || "usuário");
+      $("#login-overlay").classList.add("hidden");
       showTab("regras");
     } else {
       authToken = null;
       authUser = null;
       $("#btn-auth-toggle").classList.remove("hidden");
       $("#btn-logout").classList.add("hidden");
-      showTab("login");
+      $("#login-overlay").classList.remove("hidden");
     }
   } catch (e) {
     console.error("auth check error", e);
-    showTab("login");
+    $("#login-overlay").classList.remove("hidden");
   }
 }
 
@@ -659,6 +661,7 @@ async function doLogin() {
     $("#btn-auth-toggle").classList.add("hidden");
     $("#btn-logout").classList.remove("hidden");
     $("#account-name").textContent = "@" + (authUser.username || "usuário");
+    $("#login-overlay").classList.add("hidden");
     toast("Bem-vindo, " + (authUser.username || "usuário"));
     showTab("regras");
     await loadRules();
@@ -681,12 +684,12 @@ async function doLogout() {
   $("#btn-auth-toggle").classList.remove("hidden");
   $("#btn-logout").classList.add("hidden");
   $("#account-name").textContent = "carregando…";
-  showTab("login");
+  $("#login-overlay").classList.remove("hidden");
   toast("Sessão encerrada");
 }
 
 $("#btn-auth-toggle").addEventListener("click", () => {
-  showTab("login");
+  $("#login-overlay").classList.remove("hidden");
 });
 $("#btn-logout").addEventListener("click", doLogout);
 $("#login-form").addEventListener("submit", async (e) => {
