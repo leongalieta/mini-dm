@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert";
-import { addSchedule, getDueSchedules, updateScheduleStatus, removeSchedule, filterLogs, exportLogs } from "../lib/store.js";
+import { addSchedule, getDueSchedules, updateScheduleStatus, removeSchedule, filterLogs, exportLogs, exportStats } from "../lib/store.js";
 
 const baseStore = {
   settings: { dryRun: true },
@@ -85,4 +85,16 @@ test("exportLogs gera CSV com cabeçalho", () => {
   assert.ok(csv.includes("at,mode,username,comment,keyword,rule,status,detail"));
   assert.ok(csv.includes("mara"));
   assert.ok(csv.includes("enviado"));
+});
+
+test("exportStats aceita data como Date (Postgres) e como string", () => {
+  const store = {
+    ...baseStore,
+    log: [
+      { at: new Date("2026-11-12T15:00:00Z"), status: "enviado", ruleName: "r1" },
+      { at: "2026-11-12T16:00:00Z", status: "simulado", ruleName: "r1" }
+    ]
+  };
+  const csv = exportStats(store);
+  assert.ok(csv.includes("2026-11-12,2"));
 });

@@ -604,7 +604,7 @@ const server = createServer(async (req, res) => {
 
       const byDay = {};
       for (const entry of log) {
-        const day = entry.at ? entry.at.slice(0, 10) : "sem data";
+        const day = entry.at && !Number.isNaN(new Date(entry.at).getTime()) ? new Date(entry.at).toISOString().slice(0, 10) : "sem data";
         if (!byDay[day]) byDay[day] = 0;
         byDay[day] += 1;
       }
