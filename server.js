@@ -331,8 +331,9 @@ const server = createServer(async (req, res) => {
     res.setHeader("X-RateLimit-Remaining", String(limit.remaining));
   }
 
-  // Autenticação (isenta auth, health e webhook)
-  if (!isLoginDisabled() && !pathName.startsWith("/api/auth") && pathName !== "/api/health" && pathName !== "/api/webhook") {
+  // Autenticação (isenta auth, health, webhook e arquivos estáticos)
+  // Arquivos estáticos são servidos sem auth; o frontend decide se mostra login ou app.
+  if (!isLoginDisabled() && pathName.startsWith("/api") && !pathName.startsWith("/api/auth") && pathName !== "/api/health") {
     if (!requireAuth(req, res)) return;
   }
 
