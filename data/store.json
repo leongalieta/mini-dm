@@ -4,11 +4,17 @@
     "accountFile": "",
     "token": "",
     "dryRun": false,
-    "live": false,
+    "live": true,
     "pollSeconds": 60,
     "replyPublic": true,
     "maxPostAgeDays": 7,
-    "maxMediaPerPoll": 3
+    "maxMediaPerPoll": 3,
+    "aiEnabled": false,
+    "aiProvider": "gemini",
+    "aiApiKey": "",
+    "aiModel": "gemini-1.5-flash",
+    "aiSystemPrompt": "Você é um assistente de atendimento atencioso e profissional. Responda de forma educada e objetiva, em português. Se não souber algo, diga que vai verificar e retornar em breve.",
+    "aiAutoSend": false
   },
   "rules": [
     {
@@ -41,7 +47,12 @@
       "dmText": "Oi, {{username}}, aqui está o link: https://wa.me/554491457224?text=Quero%20o%20Funil%201%20Minuto"
     }
   ],
-  "seen": {},
+  "seen": {
+    "18119075165277695": 1794497073981,
+    "18133079108511194": 1794497073981,
+    "18115005851616836": 1794497073981,
+    "18090527402301886": 1794497073981
+  },
   "log": [
     {
       "id": "g7q4ym4m",
@@ -98,5 +109,6 @@
       "status": "erro",
       "detail": "exemplo.com\n\nNão foi possível compartilhar sua mensagem, pois esse link viola nossos Padrões da Comunidade"
     }
-  ]
+  ],
+  "schedules": []
 }

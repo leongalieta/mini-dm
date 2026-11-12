@@ -449,7 +449,7 @@ async function loadSettingsForm() {
 }
 
 $("#btn-cancel-settings").addEventListener("click", () => { /* fecha overlay se houver */ });
-$("#btn-settings").addEventListener("click", () => { showTab("config"); loadSettingsForm(); });
+$("#menu-config").addEventListener("click", () => { showTab("config"); loadSettingsForm(); });
 $("#btn-live").addEventListener("click", async () => {
   const s = state?.settings || {};
   const isLive = !s.dryRun && state?.poller?.running;
@@ -528,9 +528,7 @@ async function testAi() {
   }
 }
 
-$("#btn-ia").addEventListener("click", () => { showTab("ia"); loadAiConfig(); });
-$("#btn-close-ai").addEventListener("click", () => { /* fecha overlay */ });
-$("#ai-overlay").addEventListener("click", (e) => { if (e.target === $("#ai-overlay")) { /* fecha */ } });
+$("#menu-ia").addEventListener("click", () => { showTab("ia"); loadAiConfig(); });
 $("#ai-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   await saveAiConfig();
@@ -569,7 +567,7 @@ $("#btn-clear-log").addEventListener("click", async () => {
   } catch (err) { toast(err.message); }
 });
 
-$("#btn-export").addEventListener("click", exportLogs);
+$("#btn-exportar").addEventListener("click", exportLogs);
 $("#btn-export-panel").addEventListener("click", exportLogs);
 $("#btn-export-stats").addEventListener("click", exportStats);
 
