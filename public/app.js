@@ -497,8 +497,10 @@ $("#settings-form").addEventListener("submit", async (e) => {
     });
     await loadSettingsForm();
     await checkConnection();
-    if (result.reactivated) {
-      toast("Token válido! Modo ao vivo reativado automaticamente.");
+    if (token && result.validate && result.validate.ok) {
+      toast(result.reactivated
+        ? "Token válido! Modo ao vivo reativado automaticamente."
+        : "Token válido! Desligue a simulação para ativar o modo ao vivo.");
     } else if (token && result.validate && !result.validate.ok) {
       toast("Token salvo, mas inválido: " + (result.validate.message || ""));
     } else {

@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { loadStore, saveStore, addLog, markSeen, addSchedule, getDueSchedules, updateScheduleStatus, removeSchedule, exportLogs, filterLogs, getRulesList, exportStats } from "./lib/store.js";
 import { matchRule, render } from "./lib/engine.js";
-import { MetaClient, MetaError, resolveAccount } from "./lib/meta.js";
+import { MetaClient, MetaError, resolveAccount, discoverIgId } from "./lib/meta.js";
 import { resolveAiSettings, generateReply, aiHistoryFromLog, AiError } from "./lib/ai.js";
 import {
   initAuthTables,
@@ -433,7 +433,7 @@ const server = createServer(async (req, res) => {
     if (pathName === "/api/settings" && req.method === "POST") {
       const body = await readBody(req);
       const store = await loadStore();
-      const allowed = ["accountUsername", "accountFile", "dryRun", "pollSeconds", "replyPublic", "maxPostAgeDays", "maxMediaPerPoll", "targetPostIds", "token"];
+      const allowed = ["accountUsername", "accountFile", "dryRun", "pollSeconds", "replyPublic", "maxPostAgeDays", "maxMediaPerPoll", "targetPostIds", "token", "igId"];
       let tokenChanged = false;
       for (const key of allowed) {
         if (body[key] !== undefined) {
@@ -451,12 +451,20 @@ const server = createServer(async (req, res) => {
 
       let reactivated = false;
       let validateInfo = null;
-      if (tokenChanged && !store.settings.dryRun) {
+      if (tokenChanged) {
         try {
-          const account = resolveAccount(store.settings);
+          let account = resolveAccount(store.settings);
+          if (!account.igId) {
+            const discovered = await discoverIgId(account.token);
+            if (discovered) {
+              store.settings.igId = discovered;
+              await saveStore(store);
+              account = resolveAccount(store.settings);
+            }
+          }
           const client = new MetaClient(account);
           validateInfo = await client.validate();
-          if (!store.settings.live) {
+          if (!store.settings.dryRun && !store.settings.live) {
             store.settings.live = true;
             await saveStore(store);
             await startPoller();
