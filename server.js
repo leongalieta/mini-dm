@@ -1,5 +1,6 @@
 import path from "node:path";
 import { createServer } from "node:http";
+import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 import { loadStore, saveStore, addLog, markSeen, addSchedule, getDueSchedules, updateScheduleStatus, removeSchedule, exportLogs, filterLogs, getRulesList, exportStats } from "./lib/store.js";
 import { saveRotatedMetaToken } from "./lib/store.js";
@@ -122,6 +123,11 @@ function json(res, status, payload) {
 }
 
 function readBody(req) {
+  if (req.body !== undefined) {
+    const raw = typeof req.body === "string" || Buffer.isBuffer(req.body) ? String(req.body) : JSON.stringify(req.body);
+    if (Buffer.byteLength(raw) > 1_000_000) throw new Error("Corpo muito grande");
+    return raw ? JSON.parse(raw) : {};
+  }
   return new Promise((resolve, reject) => {
     let raw = "";
     req.on("data", (chunk) => {
@@ -362,7 +368,7 @@ function checkAuth(req, res) {
   return false;
 }
 
-const server = createServer(async (req, res) => {
+export async function handleRequest(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   const pathName = url.pathname;
 
@@ -382,13 +388,10 @@ const server = createServer(async (req, res) => {
     res.setHeader("X-RateLimit-Remaining", String(limit.remaining));
   }
 
-  // Autenticação (isenta auth, health, webhook e arquivos estáticos)
-  // Arquivos estáticos são servidos sem auth; o frontend decide se mostra login ou app.
-  if (!isLoginDisabled() && pathName.startsWith("/api") && !pathName.startsWith("/api/auth") && pathName !== "/api/health") {
-    if (!requireAuth(req, res)) return;
-  }
-
   try {
+    if (!isLoginDisabled() && pathName.startsWith("/api") && !pathName.startsWith("/api/auth") && pathName !== "/api/health") {
+      if (!await requireAuth(req, res)) return;
+    }
     if (pathName === "/api/state" && req.method === "GET") {
       return json(res, 200, await publicState());
     }
@@ -446,6 +449,10 @@ const server = createServer(async (req, res) => {
         return json(res, 200, { ok: true, disabled: true, message: "Login desativado" });
       }
       const body = await readBody(req);
+      if (typeof body.username !== "string" || typeof body.password !== "string") {
+        return json(res, 400, { error: "Informe usuário e senha." });
+      }
+      await initAuthTables();
       const result = await authenticate(body.username, body.password);
       if (!result.ok) {
         return json(res, 401, { error: result.error });
@@ -480,7 +487,7 @@ const server = createServer(async (req, res) => {
       if (!scheme || scheme !== "Bearer" || !token) {
         return json(res, 200, { ok: false, authenticated: false });
       }
-      const session = validateSession(token);
+      const session = await validateSession(token);
       if (!session) {
         return json(res, 200, { ok: false, authenticated: false });
       }
@@ -1102,7 +1109,7 @@ const server = createServer(async (req, res) => {
     console.error(err);
     json(res, 500, { error: err.message || "erro interno" });
   }
-});
+}
 
 const port = Number(process.env.PORT) || 3777;
 const host = process.env.HOST || (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
@@ -1121,12 +1128,18 @@ function openBrowser(url) {
   }
 }
 
-server.listen(port, host, async () => {
-  console.log(`Mini DM no ar em http://localhost:${port}`);
-  if (!isLoginDisabled()) await initAuthTables();
-  const store = await loadStore();
-  if (store.settings.live) await startPoller();
-  void checkTokenRenewal();
-  setInterval(checkTokenRenewal, META_TOKEN_CHECK_MS).unref();
-  if (process.env.MINI_DM_NO_OPEN !== "1") openBrowser(`http://localhost:${port}`);
-});
+export function startServer() {
+  const server = createServer(handleRequest);
+  server.listen(port, host, async () => {
+    console.log(`Mini DM no ar em http://localhost:${port}`);
+    if (!isLoginDisabled()) await initAuthTables();
+    const store = await loadStore();
+    if (store.settings.live) await startPoller();
+    void checkTokenRenewal();
+    setInterval(checkTokenRenewal, META_TOKEN_CHECK_MS).unref();
+    if (process.env.MINI_DM_NO_OPEN !== "1") openBrowser(`http://localhost:${port}`);
+  });
+  return server;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) startServer();
