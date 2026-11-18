@@ -56,9 +56,15 @@ let loginDisabled = false;
 // ---------- Navegação por views (menu) ----------
 function showTab(tab) {
   document.querySelectorAll(".view").forEach((v) => v.classList.add("hidden"));
-  document.querySelectorAll(".sidebar-item").forEach((b) => b.classList.remove("active"));
+  document.querySelectorAll(".sidebar-item").forEach((button) => {
+    button.classList.remove("active");
+    button.removeAttribute("aria-current");
+  });
   const btn = $(`#menu-${tab}`);
-  if (btn) btn.classList.add("active");
+  if (btn) {
+    btn.classList.add("active");
+    btn.setAttribute("aria-current", "page");
+  }
   const view = $(`#view-${tab}`);
   if (view) view.classList.remove("hidden");
   $("#menu-backdrop").hidden = true;
@@ -83,15 +89,16 @@ async function loadPosts() {
   grid.innerHTML = '<p class="empty">Carregando postagens…</p>';
   empty.hidden = true;
   summary.innerHTML = "";
+  $("#post-target-form").hidden = true;
   try {
-    const d = await api("/api/instagram/posts");
+    const [d, current] = await Promise.all([api("/api/instagram/posts"), api("/api/state")]);
     if (!d.ok) {
       grid.innerHTML = "";
       empty.hidden = false;
       empty.textContent = d.error || "Não consegui carregar as postagens.";
       return;
     }
-    renderPosts(d.posts || []);
+    renderPosts(d.posts || [], Array.isArray(current.settings.targetPostIds) ? current.settings.targetPostIds : [], current.rules || [], current.settings);
   } catch (err) {
     grid.innerHTML = "";
     empty.hidden = false;
@@ -99,49 +106,147 @@ async function loadPosts() {
   }
 }
 
-function renderPosts(posts) {
+function renderPosts(posts, targets, rules, settings) {
   const totalLikes = posts.reduce((s, p) => s + (p.like_count || 0), 0);
   const totalComments = posts.reduce((s, p) => s + (p.comments_count || 0), 0);
   const totalReach = posts.reduce((s, p) => s + (p.insights?.reach || 0), 0);
   $("#posts-summary").innerHTML = `
-    <div class="card post-stat"><span>Posts</span><strong>${posts.length}</strong></div>
-    <div class="card post-stat"><span>Curtidas</span><strong>${totalLikes}</strong></div>
-    <div class="card post-stat"><span>Comentários</span><strong>${totalComments}</strong></div>
-    <div class="card post-stat"><span>Alcance</span><strong>${totalReach}</strong></div>`;
+    <div class="post-stat"><span>Posts</span><strong>${posts.length}</strong></div>
+    <div class="post-stat"><span>Curtidas</span><strong>${totalLikes}</strong></div>
+    <div class="post-stat"><span>Comentários</span><strong>${totalComments}</strong></div>
+    <div class="post-stat"><span>Alcance</span><strong>${totalReach}</strong></div>`;
   $("#posts-empty").hidden = posts.length > 0;
   if (!posts.length) {
     $("#posts-empty").textContent = "Nenhum post encontrado.";
     $("#posts-grid").innerHTML = "";
     return;
   }
-  $("#posts-grid").innerHTML = posts.map(renderPostCard).join("");
+  const selected = new Set(targets.map(String));
+  const grid = $("#posts-grid");
+  grid.innerHTML = posts.map((post) => renderPostCard(
+    post, selected.has(String(post.id)), rules.filter((rule) => rule.postId === String(post.id)), settings
+  )).join("");
+  grid.onclick = (event) => {
+    const button = event.target.closest("button[data-automation-post]");
+    if (!button) return;
+    const post = posts.find((item) => String(item.id) === button.dataset.automationPost);
+    const rule = rules.find((item) => item.id === button.dataset.automationRule);
+    openRule(rule, post);
+  };
+  const form = $("#post-target-form");
+  const button = form.querySelector("button");
+  const inputs = [...$("#posts-grid").querySelectorAll("[data-post-id]")];
+  const draft = () => {
+    const ids = new Set(selected);
+    for (const input of inputs) {
+      if (input.checked) ids.add(input.dataset.postId);
+      else ids.delete(input.dataset.postId);
+    }
+    return ids;
+  };
+  function updateSelection() {
+    const ids = draft();
+    $("#post-target-count").textContent = ids.size
+      ? ids.size + (ids.size === 1 ? " post selecionado" : " posts selecionados")
+      : "Posts recentes";
+    button.disabled = ids.size === selected.size && [...ids].every((id) => selected.has(id));
+  }
+  $("#posts-grid").onchange = updateSelection;
+  updateSelection();
+  form.hidden = false;
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    const ids = draft();
+    button.disabled = true;
+    inputs.forEach((input) => { input.disabled = true; });
+    try {
+      await api("/api/settings", {
+        method: "POST",
+        body: JSON.stringify({ targetPostIds: [...ids] })
+      });
+      selected.clear();
+      ids.forEach((id) => selected.add(id));
+      toast("Seleção salva.");
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      inputs.forEach((input) => { input.disabled = false; });
+      updateSelection();
+    }
+  };
 }
 
-function renderPostCard(p) {
+function renderPostCard(p, selected, rules, settings) {
   const img = p.thumbnail_url || p.media_url || "";
   const type = p.media_type === "VIDEO" ? "Vídeo" : p.media_type === "CAROUSEL_ALBUM" ? "Carrossel" : "Imagem";
   const caption = (p.caption || "Sem legenda").replace(/\s+/g, " ").trim().slice(0, 120);
   const date = p.timestamp ? new Date(p.timestamp).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" }) : "";
   const link = p.permalink || "https://www.instagram.com/";
   return `<article class="post-card">
-    <a class="post-thumb" href="${esc(link)}" target="_blank" rel="noopener">${img ? `<img src="${esc(img)}" alt="" loading="lazy" />` : ""}</a>
+    <a class="post-thumb" aria-label="Abrir publicação no Instagram" href="${esc(link)}" target="_blank" rel="noopener">${img ? `<img src="${esc(img)}" alt="" loading="lazy" />` : ""}</a>
     <div class="post-body">
       <div class="post-meta"><span class="chip channel">${type}</span><span>${esc(date)}</span></div>
       <p class="post-caption">${esc(caption)}</p>
+      <label class="check post-target"><input type="checkbox" data-post-id="${esc(p.id)}" ${selected ? "checked" : ""} /><span><span class="post-target-off">Incluir nas regras gerais</span><span class="post-target-on">Incluído nas regras gerais</span></span></label>
       <div class="post-metrics"><span>❤️ ${p.like_count ?? 0}</span><span>💬 ${p.comments_count ?? 0}</span>${p.insights ? `<span>👁 ${p.insights.reach ?? 0}</span><span>🔖 ${p.insights.saved ?? 0}</span>` : ""}<a href="${esc(link)}" target="_blank" rel="noopener">Ver no Instagram</a></div>
+      <div class="post-automations">
+        <button type="button" class="primary" data-automation-post="${esc(p.id)}">Criar automação</button>
+        ${rules.map((rule) => renderPostRule(rule, p.id, settings)).join("")}
+      </div>
     </div>
   </article>`;
 }
 
-function openRule(rule) {
-  $("#rule-title").textContent = rule ? "Editar regra" : "Nova regra";
+function renderPostRule(rule, postId, settings) {
+  let status = "Pausada";
+  let statusClass = "paused";
+  let description = rule.active ? "Modo ao vivo desligado nas Configurações." : "Regra desativada.";
+  if (rule.active && settings.dryRun) {
+    status = "Em simulação";
+    statusClass = "simulation";
+    description = "A simulação não envia mensagens ao Instagram.";
+  } else if (rule.active && settings.live) {
+    status = "Ao vivo";
+    statusClass = "live";
+    description = "Comentários correspondentes podem receber a resposta abaixo.";
+  }
+  const keywords = rule.keywords || [];
+  const example = (template) => String(template || "").replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key) =>
+    ({ username: "cliente", keyword: keywords[0] || "" })[key] ?? ""
+  );
+  return `<div class="post-rule">
+    <div class="post-rule-head"><strong>${esc(rule.name)}</strong><span class="post-rule-status ${statusClass}">${status}</span></div>
+    <p class="muted">Palavras-chave: ${esc(keywords.join(", "))}</p>
+    <p class="muted">${description}</p>
+    <details>
+      <summary>Prévia da resposta</summary>
+      <div class="bubble dm"><small>Mensagem no Direct</small>${esc(example(rule.dmText))}${rule.dmButton ? `<span class="post-dm-button">${esc(rule.dmButton.title)}</span><small>${esc(rule.dmButton.url)}</small>` : ""}</div>
+      ${settings.replyPublic && rule.publicReply?.trim() ? `<div class="bubble public"><small>Resposta pública</small>${esc(example(rule.publicReply))}</div>` : ""}
+    </details>
+    <button type="button" class="ghost small" data-automation-post="${esc(postId)}" data-automation-rule="${esc(rule.id)}">Editar regra</button>
+  </div>`;
+}
+
+function openRule(rule, post) {
+  const postId = String(post?.id ?? rule?.postId ?? "");
+  $("#rule-title").textContent = rule ? "Editar regra" : postId ? "Criar automação" : "Nova regra";
+  $("#rule-post-id").value = postId;
+  const context = $("#rule-post-context");
+  context.hidden = !postId;
+  context.textContent = post?.caption?.trim().slice(0, 120) || (postId ? "Publicação " + postId : "");
+  $("#rule-channel-field").hidden = Boolean(postId);
+  $("#rule-button-help").textContent = postId
+    ? "O botão acompanha a mensagem no Direct enviada a quem comentar neste post."
+    : "O botão aparece em respostas a mensagens recebidas no Direct.";
   $("#rule-id").value = rule?.id || "";
   $("#rule-name").value = rule?.name || "";
   $("#rule-channel").value = rule?.channel || "comment";
   $("#rule-keywords").value = (rule?.keywords || []).join(", ");
   $("#rule-public").value = rule?.publicReply || "Te chamei no direct, {{username}}!";
   $("#rule-dm").value = rule?.dmText || "";
-  $("#rule-active").checked = rule ? Boolean(rule.active) : true;
+  $("#rule-button-title").value = rule?.dmButton?.title || "";
+  $("#rule-button-url").value = rule?.dmButton?.url || "";
+  $("#rule-active").checked = rule ? Boolean(rule.active) : !postId;
   $("#rule-overlay").hidden = false;
 }
 
@@ -193,6 +298,7 @@ function renderStatusOptions() {
 async function loadRules() {
   try {
     state = await api("/api/state");
+    showTokenRenewal(state.tokenRenewal);
     renderRules();
   } catch (e) { console.error(e); }
 }
@@ -257,17 +363,22 @@ $("#rule-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const payload = {
     id: $("#rule-id").value || undefined,
+    postId: $("#rule-post-id").value,
     name: $("#rule-name").value,
     channel: $("#rule-channel").value,
     keywords: $("#rule-keywords").value,
     publicReply: $("#rule-public").value,
     dmText: $("#rule-dm").value,
+    dmButton: $("#rule-button-title").value.trim() || $("#rule-button-url").value.trim()
+      ? { title: $("#rule-button-title").value.trim(), url: $("#rule-button-url").value.trim() }
+      : null,
     active: $("#rule-active").checked
   };
   try {
     await api("/api/rules", { method: "POST", body: JSON.stringify(payload) });
     closeRule();
     await loadRules();
+    if (!$("#view-posts").classList.contains("hidden")) await loadPosts();
     toast("Regra salva.");
   } catch (err) { toast(err.message); }
 });
@@ -511,6 +622,25 @@ $("#edit-schedule-overlay").addEventListener("click", (e) => {
 });
 
 // ---------- Configurações ----------
+function showTokenRenewal(renewal = {}) {
+  const messages = {
+    pending: "Verificação pendente.",
+    disabled: "Renovação automática desativada.",
+    missing_credentials: "Configure META_APP_ID e META_APP_SECRET no servidor.",
+    external_token: "Salve o token neste painel para permitir a renovação.",
+    unsupported: "O token não é de um usuário de sistema deste aplicativo Meta.",
+    nonexpiring: "O token não tem vencimento.",
+    invalid: "O token está inválido ou expirado. Salve um novo token.",
+    scheduled: "Renovação programada para a última semana de validade.",
+    renewed: "Token renovado.",
+    error: "Não foi possível verificar ou renovar o token. O servidor tentará novamente."
+  };
+  const expiration = renewal.expiresAt
+    ? " Vencimento: " + new Date(renewal.expiresAt).toLocaleString("pt-BR") + "."
+    : "";
+  $("#token-renewal-status").textContent = (messages[renewal.status] || messages.pending) + expiration;
+}
+
 async function loadSettingsForm() {
   try {
     const s = await api("/api/state");
@@ -519,6 +649,8 @@ async function loadSettingsForm() {
     $("#set-media").value = s.settings.maxMediaPerPoll || 3;
     $("#set-public").checked = Boolean(s.settings.replyPublic);
     $("#set-dry").checked = Boolean(s.settings.dryRun);
+    $("#set-token-renewal").checked = Boolean(s.settings.autoRenewMetaToken);
+    showTokenRenewal(s.tokenRenewal);
     $("#set-target-posts").value = Array.isArray(s.settings.targetPostIds) ? s.settings.targetPostIds.join(", ") : "";
     $("#btn-live").textContent = (!s.settings.dryRun && s.poller?.running) ? "Desligar" : "Ligar";
     $("#btn-live").classList.toggle("on", !s.settings.dryRun && s.poller?.running);
@@ -551,6 +683,7 @@ $("#settings-form").addEventListener("submit", async (e) => {
         maxMediaPerPoll: Number($("#set-media").value) || 3,
         replyPublic: $("#set-public").checked,
         dryRun: $("#set-dry").checked,
+        autoRenewMetaToken: $("#set-token-renewal").checked,
         targetPostIds: targetPostIds,
         token: token || undefined
       })

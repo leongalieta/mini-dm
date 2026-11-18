@@ -2,6 +2,8 @@ import path from "node:path";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { loadStore, saveStore, addLog, markSeen, addSchedule, getDueSchedules, updateScheduleStatus, removeSchedule, exportLogs, filterLogs, getRulesList, exportStats } from "./lib/store.js";
+import { saveRotatedMetaToken } from "./lib/store.js";
+import { inspectAndRenewToken, tokenFingerprint } from "./lib/token-renewal.js";
 import { matchRule, render } from "./lib/engine.js";
 import { MetaClient, MetaError, resolveAccount, discoverIgId } from "./lib/meta.js";
 import { resolveAiSettings, generateReply, aiHistoryFromLog, AiError } from "./lib/ai.js";
@@ -47,6 +49,45 @@ function clientIp(req) {
   return socket ? (socket.remoteAddress || 'unknown') : 'unknown';
 }
 
+const META_TOKEN_CHECK_MS = 6 * 60 * 60 * 1000;
+let tokenRenewal = { status: "pending", expiresAt: null };
+let renewalCheck;
+
+function checkTokenRenewal() {
+  if (renewalCheck) return renewalCheck;
+  renewalCheck = (async () => {
+    try {
+      const { settings } = await loadStore();
+      if (!settings.autoRenewMetaToken) {
+        tokenRenewal = { status: "disabled", expiresAt: null };
+        return;
+      }
+      const appId = process.env.META_APP_ID?.trim();
+      const appSecret = process.env.META_APP_SECRET?.trim();
+      if (!appId || !appSecret) {
+        tokenRenewal = { status: "missing_credentials", expiresAt: null };
+        return;
+      }
+      const account = settings.token?.trim() ? resolveAccount(settings) : null;
+      if (account?.source !== "token salvo nas configuracoes") {
+        tokenRenewal = { status: "external_token", expiresAt: null };
+        return;
+      }
+      const fingerprint = tokenFingerprint(settings.token.trim());
+      const { token, ...result } = await inspectAndRenewToken({
+        appId, appSecret, token: account.token, version: process.env.META_API_VERSION || "v23.0"
+      });
+      const { settings: current } = await loadStore();
+      if (!current.autoRenewMetaToken || tokenFingerprint(current.token?.trim() || "") !== fingerprint) return;
+      if (token) await saveRotatedMetaToken(fingerprint, token, result.expiresAt);
+      tokenRenewal = result;
+    } catch {
+      tokenRenewal = { ...tokenRenewal, status: "error" };
+    }
+  })().finally(() => { renewalCheck = null; });
+  return renewalCheck;
+}
+
 async function publicState() {
   const store = await loadStore();
   let account = null;
@@ -59,6 +100,7 @@ async function publicState() {
   return {
     settings: { ...store.settings, token: store.settings.token ? "***" : "" },
     rules: store.rules,
+    tokenRenewal: store.settings.autoRenewMetaToken ? tokenRenewal : { status: "disabled", expiresAt: null },
     log: store.log.slice(0, 80),
     account,
     poller: {
@@ -106,16 +148,19 @@ function cleanRule(input, existing) {
   const keywords = (Array.isArray(input.keywords) ? input.keywords : String(input.keywords || "").split(","))
     .map((k) => String(k).trim())
     .filter(Boolean);
-  const channel = ["comment", "dm", "both"].includes(input.channel)
+  const postId = String(input.postId ?? existing?.postId ?? "").trim();
+  const channel = postId ? "comment" : ["comment", "dm", "both"].includes(input.channel)
     ? input.channel
     : existing?.channel || "comment";
   return {
     id: existing?.id || uid("r"),
     name: String(input.name || existing?.name || "Nova regra").trim() || "Nova regra",
     channel,
+    postId,
     keywords: [...new Set(keywords)].slice(0, 30),
     active: input.active === undefined ? existing?.active ?? true : Boolean(input.active),
     publicReply: String(input.publicReply ?? existing?.publicReply ?? "Te chamei no direct, {{username}}!"),
+    dmButton: input.dmButton === undefined ? existing?.dmButton ?? null : input.dmButton,
     dmText:
       String(input.dmText ?? existing?.dmText ?? "") ||
       "Oi, {{username}}! Vi seu comentario e te respondo por aqui."
@@ -185,15 +230,18 @@ async function pollOnce(reason = "agendado") {
       ? store.settings.targetPostIds.filter(String)
       : [];
 
-    let media;
-    if (targetPostIds.length > 0) {
-      media = targetPostIds.map((id) => ({ id }));
-    } else {
-      media = await client.recentMedia(Number(store.settings.maxMediaPerPoll) || 3);
+    const globalMedia = targetPostIds.length
+      ? targetPostIds.map((id) => ({ id }))
+      : await client.recentMedia(Number(store.settings.maxMediaPerPoll) || 3);
+    const globalPosts = new Set(globalMedia.map((post) => String(post.id)));
+    const scopedPosts = store.rules.filter((rule) => rule.active && rule.postId).map((rule) => rule.postId);
+    const media = new Map(scopedPosts.map((id) => [id, { id }]));
+    for (const post of globalMedia) {
+      if (!media.has(String(post.id))) media.set(String(post.id), post);
     }
     const cutoff = Date.now() - (Number(store.settings.maxPostAgeDays) || 7) * 24 * 3600 * 1000;
 
-    for (const post of media) {
+    for (const post of media.values()) {
       const postTime = post.timestamp ? new Date(post.timestamp).getTime() : Date.now();
       if (postTime < cutoff) continue;
 
@@ -213,7 +261,7 @@ async function pollOnce(reason = "agendado") {
       for (const comment of comments) {
         if (store.seen[comment.id]) continue;
         summary.scanned += 1;
-        const found = matchRule(comment.text, store.rules);
+        const found = matchRule(comment.text, store.rules, "comment", String(post.id), globalPosts.has(String(post.id)));
         if (!found) {
           markSeen(store, comment.id);
           continue;
@@ -229,7 +277,7 @@ async function pollOnce(reason = "agendado") {
             await client.replyToComment(comment.id, publicText);
             summary.publicReplied += 1;
           }
-          await client.sendPrivateReply(client.igId, comment.id, dmText);
+          await client.sendPrivateReply(client.igId, comment.id, dmText, found.rule.postId ? found.rule.dmButton : null);
           summary.dmSent += 1;
           addLog(store, {
             mode: "ao vivo",
@@ -444,6 +492,17 @@ const server = createServer(async (req, res) => {
       const store = await loadStore();
       const existing = store.rules.find((r) => r.id === body.id);
       const rule = cleanRule(body, existing);
+      if (rule.postId && !/^\d+$/.test(rule.postId)) {
+        return json(res, 400, { error: "Publicação inválida." });
+      }
+      if (rule.dmButton !== null) {
+        const title = String(rule.dmButton?.title ?? "").trim();
+        const url = URL.parse(String(rule.dmButton?.url ?? "").trim());
+        if (!title || [...title].length > 20 || url?.protocol !== "https:" || url.username || url.password) {
+          return json(res, 400, { error: "Informe um título de até 20 caracteres e um link HTTPS para o botão." });
+        }
+        rule.dmButton = { title, url: url.href };
+      }
       if (!rule.keywords.length) return json(res, 400, { error: "Informe pelo menos uma palavra-chave." });
       if (existing) {
         store.rules = store.rules.map((r) => (r.id === rule.id ? rule : r));
@@ -465,7 +524,7 @@ const server = createServer(async (req, res) => {
     if (pathName === "/api/settings" && req.method === "POST") {
       const body = await readBody(req);
       const store = await loadStore();
-      const allowed = ["accountUsername", "accountFile", "dryRun", "pollSeconds", "replyPublic", "maxPostAgeDays", "maxMediaPerPoll", "targetPostIds", "token", "igId"];
+      const allowed = ["accountUsername", "accountFile", "dryRun", "pollSeconds", "replyPublic", "maxPostAgeDays", "maxMediaPerPoll", "targetPostIds", "token", "igId", "autoRenewMetaToken"];
       let tokenChanged = false;
       for (const key of allowed) {
         if (body[key] !== undefined) {
@@ -476,10 +535,14 @@ const server = createServer(async (req, res) => {
             }
             continue;
           }
-          store.settings[key] = body[key];
+          store.settings[key] = key === "autoRenewMetaToken" ? body[key] === true : body[key];
         }
       }
       await saveStore(store);
+
+      if (tokenChanged || body.autoRenewMetaToken !== undefined) {
+        void (async () => { await renewalCheck; await checkTokenRenewal(); })();
+      }
 
       let reactivated = false;
       let validateInfo = null;
@@ -544,7 +607,7 @@ const server = createServer(async (req, res) => {
       const text = String(body.text || "");
       const channel = body.channel === "dm" ? "dm" : "comment";
       const username = String(body.username || "").replace(/^@/, "") || "cliente";
-      const found = matchRule(text, store.rules, channel);
+      const found = matchRule(text, store.rules, channel, String(body.postId ?? ""));
       if (!found) {
         addLog(store, { mode: "teste", username, comment: text, status: "sem regra" });
         await saveStore(store);
@@ -832,6 +895,7 @@ const server = createServer(async (req, res) => {
           const v = change.value || {};
           comments.push({
             commentId: v.id,
+            postId: String(v.media?.id ?? ""),
             text: v.text || "",
             username: v.from?.username || "",
             fromId: v.from?.id || ""
@@ -853,10 +917,14 @@ const server = createServer(async (req, res) => {
 
       const results = [];
 
+      const targets = new Set(Array.isArray(store.settings.targetPostIds) ? store.settings.targetPostIds.map(String) : []);
+      const commentRules = body.test || store.settings.dryRun || store.settings.live
+        ? store.rules
+        : store.rules.filter((rule) => !rule.postId);
       for (const ev of comments) {
         if (!ev.commentId) continue;
         if (ev.fromId && ev.fromId === process.env.IG_USER_ID) continue;
-        const found = matchRule(ev.text, store.rules, "comment");
+        const found = matchRule(ev.text, commentRules, "comment", ev.postId, !targets.size || targets.has(ev.postId));
         if (!found) {
           results.push({ platform: "comment", id: ev.commentId, matched: false });
           continue;
@@ -897,7 +965,7 @@ const server = createServer(async (req, res) => {
             await client.replyToComment(ev.commentId, publicText);
             item.publicReply = true;
           }
-          await client.sendPrivateReply(client.igId, ev.commentId, dmText);
+          await client.sendPrivateReply(client.igId, ev.commentId, dmText, found.rule.postId ? found.rule.dmButton : null);
           item.dmSent = true;
           addLog(store, {
             mode: "ao vivo",
@@ -973,7 +1041,7 @@ const server = createServer(async (req, res) => {
             }
           }
           const dmText = buildDm();
-          await client.sendMessage(ev.senderId, dmText);
+          await client.sendMessage(ev.senderId, dmText, rule.dmButton);
           item.dmSent = true;
           addLog(store, {
             mode: "direct",
@@ -1058,5 +1126,7 @@ server.listen(port, host, async () => {
   if (!isLoginDisabled()) await initAuthTables();
   const store = await loadStore();
   if (store.settings.live) await startPoller();
+  void checkTokenRenewal();
+  setInterval(checkTokenRenewal, META_TOKEN_CHECK_MS).unref();
   if (process.env.MINI_DM_NO_OPEN !== "1") openBrowser(`http://localhost:${port}`);
 });

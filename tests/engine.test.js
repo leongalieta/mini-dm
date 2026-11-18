@@ -42,3 +42,13 @@ test("normalize trata string vazia", () => {
   assert.strictEqual(normalize(""), "");
   assert.strictEqual(normalize(null), "");
 });
+
+test("regra do post tem prioridade e só responde na própria publicação", () => {
+  const general = { id: "geral", active: true, keywords: ["agenda"] };
+  const scoped = { id: "post", postId: "123", active: true, keywords: ["agenda"] };
+  const rules = [general, scoped];
+  assert.equal(matchRule("agenda", rules, "comment", "123").rule, scoped);
+  assert.equal(matchRule("agenda", rules, "comment", "456").rule, general);
+  assert.equal(matchRule("agenda", rules, "comment", "456", false), null);
+  assert.equal(matchRule("agenda", [scoped], "dm", "123"), null);
+});

@@ -7,3 +7,5 @@ servidor.log
 npm-debug.log*
 start-local.ps1
 start-local.cmd
+
+.meta-token-rotation.json*

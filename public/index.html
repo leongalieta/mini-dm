@@ -4,13 +4,12 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Mini DM — comentário vira conversa</title>
-<link rel="stylesheet" href="/style.css?v=7" />
+<link rel="stylesheet" href="/style.css?v=11" />
 </head>
 <body>
-<div class="glow"></div>
 
 <!-- ============ MENU LATERAL (desktop) ============ -->
-<nav class="sidebar" id="sidebar">
+<nav class="sidebar" id="sidebar" aria-label="Navegação principal">
   <div class="sidebar-brand">
     <div class="mark">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -22,29 +21,29 @@
 
   <div class="sidebar-group">
     <span class="sidebar-group-title">Telas</span>
-    <button class="sidebar-item active" id="menu-posts" data-tab="posts">📸 Postagens</button>
-    <button class="sidebar-item" id="menu-regras" data-tab="regras">📇 Regras</button>
-    <button class="sidebar-item" id="menu-testar" data-tab="testar">🧪 Testar agora</button>
-    <button class="sidebar-item" id="menu-historico" data-tab="historico">📜 Histórico</button>
-    <button class="sidebar-item" id="menu-agendamentos" data-tab="agendamentos">⏰ Agendamentos</button>
+    <button class="sidebar-item active" id="menu-posts" data-tab="posts" aria-current="page">Postagens</button>
+    <button class="sidebar-item" id="menu-regras" data-tab="regras">Regras</button>
+    <button class="sidebar-item" id="menu-testar" data-tab="testar">Testar agora</button>
+    <button class="sidebar-item" id="menu-historico" data-tab="historico">Histórico</button>
+    <button class="sidebar-item" id="menu-agendamentos" data-tab="agendamentos">Agendamentos</button>
   </div>
 
   <div class="sidebar-group">
     <span class="sidebar-group-title">Ferramentas</span>
-    <button class="sidebar-item" id="menu-estatisticas" data-tab="estatisticas">📊 Estatísticas</button>
-    <button class="sidebar-item" id="menu-ia" data-tab="ia">🤖 Agente de IA</button>
-    <button class="sidebar-item" id="menu-config" data-tab="config">⚙️ Configurações</button>
+    <button class="sidebar-item" id="menu-estatisticas" data-tab="estatisticas">Estatísticas</button>
+    <button class="sidebar-item" id="menu-ia" data-tab="ia">Agente de IA</button>
+    <button class="sidebar-item" id="menu-config" data-tab="config">Configurações</button>
   </div>
 
   <div class="sidebar-footer">
-    <button class="sidebar-item danger" id="btn-exportar">📥 Exportar CSV</button>
+    <button class="sidebar-item" id="btn-exportar">Exportar CSV</button>
     <span id="status-chip" class="sidebar-status"></span>
   </div>
 </nav>
 
 <!-- ============ MENU HAMBÚRGUER (mobile) ============ -->
 <header class="top">
-  <button class="ghost" id="btn-menu-toggle" title="Menu">☰</button>
+  <button class="ghost" id="btn-menu-toggle" title="Menu" aria-label="Abrir menu" aria-controls="sidebar">☰</button>
   <div class="brand">
     <div class="mark">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -179,10 +178,16 @@
       <h2>Postagens</h2>
       <p>Seus posts no Instagram e o desempenho de cada um.</p>
     </div>
+    <form id="post-target-form" hidden>
+      <div>
+        <strong id="post-target-count" aria-live="polite"></strong>
+        <small>Escolha onde as regras gerais de comentários podem rodar.</small>
+      </div>
+      <button type="submit" class="primary" disabled>Salvar seleção</button>
+    </form>
     <div class="posts-summary" id="posts-summary"></div>
     <div class="posts-grid" id="posts-grid"></div>
-    <p class="empty" id="posts-empty" hidden></p>
-    <p class="muted" style="margin-top:14px;font-size:12px">Alcance, salvamentos e partilhas são os totais de cada post no Instagram.</p>
+    <p class="empty" id="posts-empty" role="status" hidden></p>
   </section>
 
   <section id="view-estatisticas" class="view hidden">
@@ -193,22 +198,16 @@
     <div class="grid" style="margin-top:14px">
       <div class="card">
         <h3 style="font-size:15px;margin-top:0">Resumo</h3>
-        <div class="row" style="margin-top:10px">
-          <div><strong>Regras totais</strong><span id="stat-total-rules" style="float:right">0</span></div>
-          <div><strong>Regras ativas</strong><span id="stat-active-rules" style="float:right">0</span></div>
-        </div>
-        <div class="row" style="margin-top:8px">
-          <div><strong>Enviadas</strong><span id="stat-sent" style="float:right">0</span></div>
-          <div><strong>Simuladas</strong><span id="stat-simulated" style="float:right">0</span></div>
-          <div><strong>Erros</strong><span id="stat-error" style="float:right">0</span></div>
-        </div>
-        <div class="row" style="margin-top:8px">
-          <div><strong>Logs totais</strong><span id="stat-total-log" style="float:right">0</span></div>
-        </div>
-        <div class="row" style="margin-top:8px">
-          <div><strong>Agendados pendentes</strong><span id="stat-pending-schedules-modal" style="float:right">0</span></div>
-          <div><strong>Agendados enviados</strong><span id="stat-sent-schedules" style="float:right">0</span></div>
-        </div>
+        <dl class="stat-summary">
+          <div><dt>Regras totais</dt><dd id="stat-total-rules">0</dd></div>
+          <div><dt>Regras ativas</dt><dd id="stat-active-rules">0</dd></div>
+          <div><dt>Enviadas</dt><dd id="stat-sent">0</dd></div>
+          <div><dt>Simuladas</dt><dd id="stat-simulated">0</dd></div>
+          <div><dt>Erros</dt><dd id="stat-error">0</dd></div>
+          <div><dt>Logs totais</dt><dd id="stat-total-log">0</dd></div>
+          <div><dt>Agendados pendentes</dt><dd id="stat-pending-schedules-modal">0</dd></div>
+          <div><dt>Agendados enviados</dt><dd id="stat-sent-schedules">0</dd></div>
+        </dl>
         <button class="ghost small" id="btn-export-stats" style="margin-top:12px">Exportar CSV</button>
       </div>
       <div class="card">
@@ -267,11 +266,13 @@
       </div>
       <label class="check"><input type="checkbox" id="set-public" /><span>Responder também no comentário (público)</span></label>
       <label class="check"><input type="checkbox" id="set-dry" /><span>Modo simulação (não envia nada de verdade)</span></label>
+      <label class="check"><input type="checkbox" id="set-token-renewal" /><span>Renovar automaticamente o token da Meta</span></label>
+      <small id="token-renewal-status" class="muted" role="status"></small>
       <label><span>Token de acesso do Instagram</span><input id="set-token" type="password" placeholder="Cole o token da Meta" /><small style="color:var(--muted)">Se preenchido, o modo ao vivo será reativado ao salvar.</small></label>
       <label>
         <span>Post(s) alvo (IDs separados por vírgula)</span>
         <input id="set-target-posts" placeholder="17899999999999999, 17900000000000000" />
-        <small style="color:var(--muted)">Deixe vazio para usar posts recentes. O ID do post fica na URL do Instagram.</small>
+        <small style="color:var(--muted)">Deixe vazio para usar posts recentes. Você também pode selecionar posts na tela Postagens.</small>
       </label>
       <div style="margin-top:12px"><button type="submit" class="primary">Salvar</button></div>
       <div class="divider"></div>
@@ -290,9 +291,16 @@
     <form id="rule-form" class="form">
       <input type="hidden" id="rule-id" />
       <label><span>Nome da regra</span><input id="rule-name" placeholder="Pedido de preço" /></label>
-      <label><span>Onde a regra responde</span><select id="rule-channel"><option value="comment">Comentário no post</option><option value="dm">Mensagem no direct</option><option value="both">Comentário e direct</option></select></label>
+      <input id="rule-post-id" type="hidden" />
+      <p id="rule-post-context" class="rule-post-context" hidden></p>
+      <label id="rule-channel-field"><span>Onde a regra responde</span><select id="rule-channel"><option value="comment">Comentário no post</option><option value="dm">Mensagem no direct</option><option value="both">Comentário e direct</option></select></label>
       <label><span>Palavras-chave <em>separe por vírgula</em></span><input id="rule-keywords" placeholder="preço, valor, quanto custa" /></label>
       <label><span>Resposta pública no comentário <em>opcional</em></span><input id="rule-public" placeholder="Te chamei no direct, {{username}}!" /></label>
+      <div id="rule-direct-button-fields" class="form">
+      <label><span>Texto do botão (opcional)</span><input id="rule-button-title" maxlength="20" placeholder="Abrir WhatsApp" /></label>
+      <label><span>Link HTTPS do botão</span><input id="rule-button-url" type="url" placeholder="https://wa.me/..." /></label>
+      <p id="rule-button-help" class="muted">O botão aparece em respostas a mensagens recebidas no Direct.</p>
+      </div>
       <label><span>Mensagem no direct</span><textarea id="rule-dm" rows="4" placeholder="Oi, {{username}}! Vi seu comentário…"></textarea></label>
       <label class="check"><input type="checkbox" id="rule-active" checked /><span>Regra ativa</span></label>
       <div class="modal-actions"><button type="button" class="ghost" id="btn-cancel-rule">Cancelar</button><button type="submit" class="primary">Salvar regra</button></div>
@@ -315,6 +323,6 @@
 </div>
 
 <div class="toast" id="toast" hidden></div>
-<script src="/app.js?v=7"></script>
+<script src="/app.js?v=11"></script>
 </body>
 </html>
