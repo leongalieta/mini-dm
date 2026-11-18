@@ -4,5 +4,11 @@
       "source": "/api/:path((?!handler$).+)",
       "destination": "/api/handler?__mini_dm_route=:path"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/renew-meta-token",
+      "schedule": "0 12 * * *"
+    }
   ]
 }

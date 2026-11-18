@@ -2,6 +2,7 @@ import path from "node:path";
 import { createServer } from "node:http";
 import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
+import { timingSafeEqual } from "node:crypto";
 import { loadStore, saveStore, addLog, markSeen, addSchedule, getDueSchedules, updateScheduleStatus, removeSchedule, exportLogs, filterLogs, getRulesList, exportStats } from "./lib/store.js";
 import { saveRotatedMetaToken } from "./lib/store.js";
 import { inspectAndRenewToken, tokenFingerprint } from "./lib/token-renewal.js";
@@ -372,6 +373,22 @@ export async function handleRequest(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   const pathName = url.pathname;
 
+  if (pathName === "/api/cron/renew-meta-token") {
+    if (req.method !== "GET") {
+      res.setHeader("Allow", "GET");
+      return json(res, 405, { error: "Método não permitido." });
+    }
+    const secret = process.env.CRON_SECRET;
+    const supplied = Buffer.from(req.headers.authorization || "");
+    const expected = Buffer.from("Bearer " + (secret || ""));
+    if (!secret || supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
+      return json(res, 401, { error: "Agendamento não autorizado." });
+    }
+    await checkTokenRenewal();
+    const ok = tokenRenewal.status !== "error";
+    return json(res, ok ? 200 : 503, { ok, ...tokenRenewal });
+  }
+
   if (pathName !== "/api/webhook" && !checkAuth(req, res)) return;
 
   // Rate limiting (isenta webhook da Meta)
@@ -548,7 +565,8 @@ export async function handleRequest(req, res) {
       await saveStore(store);
 
       if (tokenChanged || body.autoRenewMetaToken !== undefined) {
-        void (async () => { await renewalCheck; await checkTokenRenewal(); })();
+        await renewalCheck;
+        await checkTokenRenewal();
       }
 
       let reactivated = false;

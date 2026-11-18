@@ -104,6 +104,6 @@ mini-dm/
 
 ### Renovação automática do token da Meta
 
-Em **Configurações**, salve um token expirante de usuário de sistema criado para o seu aplicativo Meta e marque **Renovar automaticamente o token da Meta**. Configure `META_APP_ID` e `META_APP_SECRET` nas variáveis de ambiente do processo Node. O servidor verifica o token ao iniciar, ao salvar a configuração e a cada seis horas. A troca é feita na última semana de validade e o painel mostra a data de vencimento.
+Em **Configurações**, salve um token expirante de usuário de sistema criado para o seu aplicativo Meta e marque **Renovar automaticamente o token da Meta**. Configure `META_APP_ID` e `META_APP_SECRET` nas variáveis de ambiente do processo Node. Em execução contínua, o servidor verifica o token ao iniciar e a cada seis horas. Na Vercel, a verificação diária começa na janela das 12h UTC (9h em Brasília). Cadastre `CRON_SECRET` como uma variável sensível no ambiente Production para que a Vercel autentique a chamada agendada. Salvar a configuração no painel também dispara uma verificação. A troca é feita na última semana de validade e o painel mostra a data de vencimento.
 
 O token precisa ser salvo no painel para o servidor poder persistir a renovação. Quando `INSTAGRAM_ACCESS_TOKEN` estiver definido, ele tem prioridade e o painel indica que o token ativo é externo. Se o token já estiver inválido, gere um novo na Meta. Use armazenamento persistente para `MINI_DM_DATA` ou PostgreSQL para manter o token renovado após reiniciar.
