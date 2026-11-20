@@ -9,3 +9,5 @@ start-local.ps1
 start-local.cmd
 
 .meta-token-rotation.json*
+
+profiles/

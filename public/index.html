@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Mini DM — comentário vira conversa</title>
-<link rel="stylesheet" href="/style.css?v=11" />
+<link rel="stylesheet" href="/style.css?v=12" />
 </head>
 <body>
 
@@ -56,6 +56,8 @@
     </div>
   </div>
   <div class="top-right">
+    <label class="profile-switch"><span>Conta do Instagram</span><select id="profile-select" aria-label="Conta do Instagram"><option value="default">Conta principal</option></select></label>
+    <button class="ghost" id="btn-add-profile">Adicionar conta</button>
     <div class="account" id="account-chip">
       <span class="avatar" id="avatar">@</span>
       <div>
@@ -69,6 +71,18 @@
   </div>
 </header>
 
+<div class="overlay" id="profile-overlay" hidden>
+  <div class="modal">
+    <div class="modal-head"><h2>Adicionar Instagram</h2><button type="button" class="icon" id="close-profile" aria-label="Fechar">✕</button></div>
+    <form class="form" id="profile-form">
+      <label><span>Usuário do Instagram</span><input id="profile-username" required placeholder="@seuperfil" /></label>
+      <label><span>ID da conta profissional</span><input id="profile-ig-id" required inputmode="numeric" /></label>
+      <label><span>Token de acesso desta conta</span><input id="profile-token" type="password" required autocomplete="off" /></label>
+      <p class="muted">A conta será validada antes de salvar. As novas automações começam em simulação.</p>
+      <button class="primary" type="submit">Conectar conta</button>
+    </form>
+  </div>
+</div>
 <!-- Overlay do menu mobile -->
 <div class="menu-backdrop" id="menu-backdrop" hidden></div>
 
@@ -323,6 +337,6 @@
 </div>
 
 <div class="toast" id="toast" hidden></div>
-<script src="/app.js?v=11"></script>
+<script src="/app.js?v=12"></script>
 </body>
 </html>

@@ -17,6 +17,7 @@ const timeAgo = (iso) => {
 
 async function api(path, options = {}) {
   const headers = { "content-type": "application/json", ...(options.headers || {}) };
+  headers["x-instagram-profile"] = localStorage.getItem("mini-dm-profile") || "default";
   if (authToken) headers["Authorization"] = "Bearer " + authToken;
   const res = await fetch(path, {
     ...options,
@@ -298,6 +299,9 @@ function renderStatusOptions() {
 async function loadRules() {
   try {
     state = await api("/api/state");
+    const {profiles} = await api("/api/profiles");
+    $("#profile-select").innerHTML = profiles.map(p => '<option value="' + esc(p.id) + '">' + esc(p.username || "Conta principal") + '</option>').join("");
+    $("#profile-select").value = localStorage.getItem("mini-dm-profile") || "default";
     showTokenRenewal(state.tokenRenewal);
     renderRules();
   } catch (e) { console.error(e); }
@@ -925,3 +929,24 @@ $("#login-form").addEventListener("submit", async (e) => {
   setInterval(loadStats, 30000);
   setInterval(loadSchedules, 30000);
 })();
+
+$("#profile-select").addEventListener("change", event => {
+ localStorage.setItem("mini-dm-profile",event.target.value);
+ location.reload();
+});
+$("#btn-add-profile").addEventListener("click",()=> { $("#profile-overlay").hidden=false; });
+$("#close-profile").addEventListener("click",()=> { $("#profile-overlay").hidden=true; });
+$("#profile-form").addEventListener("submit",async event=>{
+ event.preventDefault();
+ const button=event.target.querySelector("button[type=submit]");
+ button.disabled=true;
+ try {
+ const result=await api("/api/profiles",{method:"POST",body:JSON.stringify({
+ username:$("#profile-username").value,igId:$("#profile-ig-id").value,token:$("#profile-token").value
+ })});
+ $("#profile-token").value="";
+ localStorage.setItem("mini-dm-profile",result.id);
+ location.reload();
+ } catch(error) { toast(error.message); }
+ finally { button.disabled=false; }
+});

@@ -1,4 +1,5 @@
 import path from "node:path";
+import { profileContext, listProfiles, createProfile } from "./lib/store.js";
 import { createServer } from "node:http";
 import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
@@ -23,7 +24,12 @@ import {
 
 const POLL_TICK_MS = 5000;
 let poller = { timer: null, running: false, lastRun: null, lastError: null, lastSummary: null };
-let postsCache = { at: 0, data: null };
+const profileCaches = new Map();
+function profilePostsCache() {
+ const id = profileContext.getStore() || "default";
+ if (!profileCaches.has(id)) profileCaches.set(id,{at:0,data:null});
+ return profileCaches.get(id);
+}
 
 // ---------- Rate limiting simples ----------
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minuto
@@ -52,12 +58,15 @@ function clientIp(req) {
 }
 
 const META_TOKEN_CHECK_MS = 6 * 60 * 60 * 1000;
-let tokenRenewal = { status: "pending", expiresAt: null };
+const renewalStates = new Map();
+
 let renewalCheck;
 
-function checkTokenRenewal() {
-  if (renewalCheck) return renewalCheck;
+async function checkTokenRenewal() {
+  if (renewalCheck) await renewalCheck;
+  const profileId = profileContext.getStore() || "default";
   renewalCheck = (async () => {
+    let tokenRenewal = {status:"pending",expiresAt:null};
     try {
       const { settings } = await loadStore();
       if (!settings.autoRenewMetaToken) {
@@ -85,6 +94,8 @@ function checkTokenRenewal() {
       tokenRenewal = result;
     } catch {
       tokenRenewal = { ...tokenRenewal, status: "error" };
+    } finally {
+      renewalStates.set(profileId,tokenRenewal);
     }
   })().finally(() => { renewalCheck = null; });
   return renewalCheck;
@@ -102,7 +113,7 @@ async function publicState() {
   return {
     settings: { ...store.settings, token: store.settings.token ? "***" : "" },
     rules: store.rules,
-    tokenRenewal: store.settings.autoRenewMetaToken ? tokenRenewal : { status: "disabled", expiresAt: null },
+    tokenRenewal: store.settings.autoRenewMetaToken ? renewalStates.get(profileContext.getStore() || "default") || {status:"pending"} : { status: "disabled", expiresAt: null },
     log: store.log.slice(0, 80),
     account,
     poller: {
@@ -335,17 +346,25 @@ async function pollOnce(reason = "agendado") {
   }
 }
 
+async function pollAllProfiles(reason) {
+  const profiles = await listProfiles();
+  for (const profile of profiles) {
+    if (profile.settings.live) await profileContext.run(profile.id, () => pollOnce(reason));
+  }
+}
 async function startPoller() {
-  stopPoller();
+  if (poller.timer) clearInterval(poller.timer);
   const store = await loadStore();
   const seconds = Math.max(20, Number(store.settings.pollSeconds) || 60);
   poller.timer = setInterval(() => {
-    pollOnce("agendado").catch(() => {});
+    pollAllProfiles("agendado").catch(() => {});
   }, seconds * 1000);
-  pollOnce("inicio").catch(() => {});
+  pollAllProfiles("inicio").catch(() => {});
 }
 
 function stopPoller() {
+  // O temporizador atende todas as contas e ignora contas pausadas.
+  if (profileContext.getStore()) return;
   if (poller.timer) clearInterval(poller.timer);
   poller.timer = null;
 }
@@ -370,6 +389,36 @@ function checkAuth(req, res) {
 }
 
 export async function handleRequest(req, res) {
+  const pathname = new URL(req.url, "http://localhost").pathname;
+  if (pathname === "/api/webhook" && req.method === "POST") {
+    const body = await readBody(req);
+    const profiles = await listProfiles();
+    const results = [];
+    for (const entry of body.entry || []) {
+      const profile = profiles.find(p => {
+        try { return String(resolveAccount(p.settings).igId || "") === String(entry.id); }
+        catch { return false; }
+      });
+      if (!profile) continue;
+      const response = {
+        headers: {}, statusCode:200,
+        setHeader(key,value) { this.headers[key]=value; },
+        writeHead(status) { this.statusCode=status; },
+        end(value) { this.body=value; }
+      };
+      await profileContext.run(profile.id, () => handleProfileRequest(
+        {...req, url:req.url, headers:req.headers, method:req.method, body:{...body,entry:[entry]}}, response
+      ));
+      results.push({profile:profile.id,status:response.statusCode});
+    }
+    return json(res,200,{received:true,results});
+  }
+  const id = req.headers["x-instagram-profile"] || "default";
+  if (id !== "default" && !/^profile_[a-z0-9]+$/.test(id)) return json(res,400,{error:"Perfil inválido"});
+  return profileContext.run(id, () => handleProfileRequest(req,res));
+}
+
+async function handleProfileRequest(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   const pathName = url.pathname;
 
@@ -384,9 +433,14 @@ export async function handleRequest(req, res) {
     if (!secret || supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
       return json(res, 401, { error: "Agendamento não autorizado." });
     }
-    await checkTokenRenewal();
-    const ok = tokenRenewal.status !== "error";
-    return json(res, ok ? 200 : 503, { ok, ...tokenRenewal });
+    const results = [];
+    for (const profile of await listProfiles()) {
+      await profileContext.run(profile.id, checkTokenRenewal);
+      results.push({profile:profile.id,...renewalStates.get(profile.id)});
+    }
+    const ok = results.every(result=>result.status !== "error");
+    return json(res,ok ? 200 : 503,{ok,results});
+
   }
 
   if (pathName !== "/api/webhook" && !checkAuth(req, res)) return;
@@ -406,8 +460,25 @@ export async function handleRequest(req, res) {
   }
 
   try {
-    if (!isLoginDisabled() && pathName.startsWith("/api") && !pathName.startsWith("/api/auth") && pathName !== "/api/health") {
+    if (!isLoginDisabled() && pathName.startsWith("/api") && !pathName.startsWith("/api/auth") && pathName !== "/api/health" && pathName !== "/api/webhook") {
       if (!await requireAuth(req, res)) return;
+    }
+    if (pathName === "/api/profiles" && req.method === "GET") {
+      const profiles = await listProfiles();
+      return json(res,200,{profiles:profiles.map(p=>({id:p.id,username:p.settings.accountUsername,igId:p.settings.igId}))});
+    }
+    if (pathName === "/api/profiles" && req.method === "POST") {
+      const body = await readBody(req);
+      const username = String(body.username || "").trim().replace(/^@/,"");
+      const token = String(body.token || "").trim();
+      const igId = String(body.igId || "").trim();
+      if (!username || !token || !/^\d+$/.test(igId)) return json(res,400,{error:"Informe o usuário, o ID da conta e o token."});
+      const client = new MetaClient({username,igId,token});
+      await client.validate();
+      const profiles = await listProfiles();
+      if (profiles.some(p=>String(p.settings.igId)===igId)) return json(res,400,{error:"Esta conta já está cadastrada."});
+      const id = await createProfile(username,igId,token);
+      return json(res,201,{id});
     }
     if (pathName === "/api/state" && req.method === "GET") {
       return json(res, 200, await publicState());
@@ -440,6 +511,7 @@ export async function handleRequest(req, res) {
       if (!account.token || !account.igId) {
         return json(res, 200, { ok: false, error: "Conta do Instagram não configurada.", posts: [] });
       }
+      const postsCache = profilePostsCache();
       if (postsCache.data && Date.now() - postsCache.at < 120000) {
         return json(res, 200, postsCache.data);
       }
@@ -453,7 +525,7 @@ export async function handleRequest(req, res) {
           posts,
           insights: posts.some((p) => p.insights)
         };
-        postsCache = { at: Date.now(), data: payload };
+        Object.assign(postsCache, {at:Date.now(),data:payload});
         return json(res, 200, payload);
       } catch (err) {
         return json(res, 200, { ok: false, error: err.message, posts: [] });
@@ -930,7 +1002,7 @@ export async function handleRequest(req, res) {
           const message = event.message || {};
           if (!message.text || message.is_echo || message.is_deleted) continue;
           const senderId = event.sender?.id || "";
-          if (!senderId || senderId === process.env.IG_USER_ID) continue;
+          if (!senderId || senderId === resolveAccount(store.settings).igId) continue;
           messages.push({
             mid: message.mid || "",
             text: message.text,
@@ -948,7 +1020,7 @@ export async function handleRequest(req, res) {
         : store.rules.filter((rule) => !rule.postId);
       for (const ev of comments) {
         if (!ev.commentId) continue;
-        if (ev.fromId && ev.fromId === process.env.IG_USER_ID) continue;
+        if (ev.fromId && ev.fromId === resolveAccount(store.settings).igId) continue;
         const found = matchRule(ev.text, commentRules, "comment", ev.postId, !targets.size || targets.has(ev.postId));
         if (!found) {
           results.push({ platform: "comment", id: ev.commentId, matched: false });
@@ -1152,7 +1224,7 @@ export function startServer() {
     console.log(`Mini DM no ar em http://localhost:${port}`);
     if (!isLoginDisabled()) await initAuthTables();
     const store = await loadStore();
-    if (store.settings.live) await startPoller();
+    if ((await listProfiles()).some(p=>p.settings.live)) await startPoller();
     void checkTokenRenewal();
     setInterval(checkTokenRenewal, META_TOKEN_CHECK_MS).unref();
     if (process.env.MINI_DM_NO_OPEN !== "1") openBrowser(`http://localhost:${port}`);

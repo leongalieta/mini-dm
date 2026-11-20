@@ -557,3 +557,16 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
   .overlay, .modal, .toast, .menu-backdrop, #login-overlay { animation: none; }
   .primary:active { transform: none; }
 }
+
+.top-right { display:flex; align-items:center; gap:10px; }
+.profile-switch { display:grid; gap:3px; }
+.profile-switch > span { font-size:11px; color:var(--muted); }
+.profile-switch select { max-width:180px; padding-block:6px; }
+@media(max-width:700px) {
+ body { padding-top:115px; }
+ .top { height:115px; flex-wrap:wrap; align-content:center; gap:8px; }
+ .top-right { flex:1; justify-content:flex-end; }
+ .sidebar { top:115px; }
+ .account { display:none; }
+ #btn-add-profile { font-size:12px; padding:7px; }
+}
