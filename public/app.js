@@ -189,7 +189,7 @@ function renderPostCard(p, selected, rules, settings) {
       <div class="post-meta"><span class="chip channel">${type}</span><span>${esc(date)}</span></div>
       <p class="post-caption">${esc(caption)}</p>
       <label class="check post-target"><input type="checkbox" data-post-id="${esc(p.id)}" ${selected ? "checked" : ""} /><span><span class="post-target-off">Incluir nas regras gerais</span><span class="post-target-on">Incluído nas regras gerais</span></span></label>
-      <div class="post-metrics"><span>❤️ ${p.like_count ?? 0}</span><span>💬 ${p.comments_count ?? 0}</span>${p.insights ? `<span>👁 ${p.insights.reach ?? 0}</span><span>🔖 ${p.insights.saved ?? 0}</span>` : ""}<a href="${esc(link)}" target="_blank" rel="noopener">Ver no Instagram</a></div>
+      <div class="post-metrics"><span>Curtidas ${p.like_count ?? 0}</span><span>Comentários ${p.comments_count ?? 0}</span>${p.insights ? `<span>Alcance ${p.insights.reach ?? 0}</span><span>Salvamentos ${p.insights.saved ?? 0}</span>` : ""}<a href="${esc(link)}" target="_blank" rel="noopener">Ver no Instagram</a></div>
       <div class="post-automations">
         <button type="button" class="primary" data-automation-post="${esc(p.id)}">Criar automação</button>
         ${rules.map((rule) => renderPostRule(rule, p.id, settings)).join("")}
