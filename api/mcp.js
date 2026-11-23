@@ -56,7 +56,7 @@ async function runTool(name,args={}) {
       const drafts=Array.isArray(store.settings.mcpDrafts)?store.settings.mcpDrafts:[];
       const normalize=(postId,keyword,dmText,publicReply,name,source)=> {
         const post=String(postId||"").trim(), word=String(keyword||"").trim().slice(0,80), dm=String(dmText||"").trim().slice(0,1500);
-        if(!/^\\d{8,30}$/.test(post) || !word || !dm) throw new Error("Informe ID numérico do post, palavra-chave e mensagem");
+        if(!/^\d{8,30}$/.test(post) || !word || !dm) throw new Error("Informe ID numérico do post, palavra-chave e mensagem");
         return {id:"draft_"+randomUUID(),postId:post,keywords:[word],dmText:dm,publicReply:String(publicReply||"").slice(0,500),name:String(name||"Automação de comentário").slice(0,100),source,status:"pending",createdAt:new Date().toISOString()};
       };
       if(name==="listar_rascunhos") return {rascunhos:drafts};
@@ -71,7 +71,7 @@ async function runTool(name,args={}) {
         const posts=await client.recentMedia(15);
         const found=[];
         for(const post of posts) {
-          const match=String(post.caption||"").match(/(?:comente|comentar|coment[aá]rios?[: ]|digite|escreva)\\s+["“']?([A-Za-zÀ-ÿ0-9_-]{2,30})/i);
+          const match=String(post.caption||"").match(/(?:comente|comentar|coment[aá]rios?[: ]|digite|escreva)\s+["“']?([A-Za-zÀ-ÿ0-9_-]{2,30})/i);
           if(!match) continue;
           const keyword=match[1].replace(/["”']$/,"");
           if(store.rules.some(r=>r.postId===String(post.id) && (r.keywords||[]).some(k=>k.toLowerCase()===keyword.toLowerCase()))) continue;
