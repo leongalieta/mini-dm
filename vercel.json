@@ -1,7 +1,7 @@
 {
   "rewrites": [
     {
-      "source": "/api/:path((?!handler$).+)",
+      "source": "/api/:path((?!handler$|mcp$).+)",
       "destination": "/api/handler?__mini_dm_route=:path"
     }
   ],
